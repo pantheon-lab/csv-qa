@@ -855,100 +855,22 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
           </Tabs>
         </Paper>
         {tab === 0 && (
-          <Paper sx={{ p: 2 }}>
+          <Paper sx={{ p: 2, pb: 12 }}>
+            {" "}
+            {/* Add bottom padding for fixed bar */}
             {!hasData ? (
               <Box sx={{ p: 1 }}>
                 <Alert severity="info">
                   {" "}
                   Upload a CSV with headers to begin. Everything runs locally in
                   your browser. Tip: choose your status/comment columns above.
-                  If a name you type doesn’t exist, it will be created
+                  If a name you type doesn't exist, it will be created
                   automatically.
                 </Alert>
               </Box>
             ) : (
               <Stack spacing={2}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1}
-                  alignItems={{ sm: "center" }}
-                >
-                  <Tooltip title="Previous">
-                    <span>
-                      <IconButton
-                        disabled={currentIdx <= 0}
-                        onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
-                      >
-                        <SkipPreviousIcon />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <TextField
-                    label="Row #"
-                    size="small"
-                    type="number"
-                    value={currentIdx + 1}
-                    onChange={(e) => jumpTo(e.target.value)}
-                    sx={{ width: 120 }}
-                  />
-                  <Typography variant="body2" color="text.secondary">
-                    / {rows.length}
-                  </Typography>
-                  <Tooltip title="Next">
-                    <span>
-                      <IconButton
-                        disabled={currentIdx >= rows.length - 1}
-                        onClick={() =>
-                          setCurrentIdx((i) => Math.min(rows.length - 1, i + 1))
-                        }
-                      >
-                        <SkipNextIcon />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                  <Box sx={{ flex: 1 }} />
-                  <Stack direction="row" spacing={1}>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<CheckIcon />}
-                      onClick={() => applyStatus("TRUE")}
-                    >
-                      Pass
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      startIcon={<CloseIcon />}
-                      onClick={() => applyStatus("FALSE")}
-                    >
-                      Fail
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      startIcon={<WarningAmberIcon />}
-                      onClick={() => applyStatus("INVALID")}
-                    >
-                      Invalid
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      startIcon={<ForumIcon />}
-                      onClick={() => applyStatus("DISCUSS")}
-                    >
-                      Discuss
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      startIcon={<ClearIcon />}
-                      onClick={clearStatus}
-                    >
-                      Clear
-                    </Button>
-                  </Stack>
-                </Stack>
+                {/* Remove the navigation bar from here */}
 
                 <Divider />
 
@@ -1242,6 +1164,113 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
           </Paper>
         )}
       </Container>
+
+      {/* Fixed bottom navigation bar for Row QA tab */}
+      {tab === 0 && hasData && (
+        <Paper
+          sx={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1200,
+            borderRadius: 0,
+            borderTop: 1,
+            borderColor: "divider",
+            boxShadow: "0 -2px 8px rgba(0,0,0,0.15)",
+          }}
+        >
+          <Container maxWidth="xl">
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ sm: "center" }}
+              sx={{ py: 1.5, px: 1 }}
+            >
+              <Tooltip title="Previous">
+                <span>
+                  <IconButton
+                    disabled={currentIdx <= 0}
+                    onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+                  >
+                    <SkipPreviousIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <TextField
+                label="Row #"
+                size="small"
+                type="number"
+                value={currentIdx + 1}
+                onChange={(e) => jumpTo(e.target.value)}
+                sx={{ width: 120 }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                / {rows.length}
+              </Typography>
+              <Tooltip title="Next">
+                <span>
+                  <IconButton
+                    disabled={currentIdx >= rows.length - 1}
+                    onClick={() =>
+                      setCurrentIdx((i) => Math.min(rows.length - 1, i + 1))
+                    }
+                  >
+                    <SkipNextIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Box sx={{ flex: 1 }} />
+              <Stack direction="row" spacing={1} flexWrap="wrap">
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckIcon />}
+                  onClick={() => applyStatus("TRUE")}
+                  size="small"
+                >
+                  Pass
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<CloseIcon />}
+                  onClick={() => applyStatus("FALSE")}
+                  size="small"
+                >
+                  Fail
+                </Button>
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<WarningAmberIcon />}
+                  onClick={() => applyStatus("INVALID")}
+                  size="small"
+                >
+                  Invalid
+                </Button>
+                <Button
+                  variant="contained"
+                  color="warning"
+                  startIcon={<ForumIcon />}
+                  onClick={() => applyStatus("DISCUSS")}
+                  size="small"
+                >
+                  Discuss
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<ClearIcon />}
+                  onClick={clearStatus}
+                  size="small"
+                >
+                  Clear
+                </Button>
+              </Stack>
+            </Stack>
+          </Container>
+        </Paper>
+      )}
 
       <Snackbar
         open={!!snack}
