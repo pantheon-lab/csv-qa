@@ -319,6 +319,10 @@ export default function App() {
   const [evalScoreCol, setEvalScoreCol] = useState("");
   const [evalExplainCol, setEvalExplainCol] = useState("");
 
+  // New: citations feature
+  const [citationsCol, setCitationsCol] = useState("");
+  const [useCitations, setUseCitations] = useState(true);
+
   // New: use _checked column toggle (default ON)
   const [useCheckedStatus, setUseCheckedStatus] = useState(true);
 
@@ -422,8 +426,18 @@ export default function App() {
       "evaluationreason",
       "gptcomment",
     ]);
+
+    // Auto-detect citations column
+    if (useCitations) {
+      maybeSet(setCitationsCol, citationsCol, [
+        "citations",
+        "citation",
+        "sources",
+        "references",
+      ]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [headers]);
+  }, [headers, useCitations]);
 
   const applyStatus = (val) => {
     if (!statusCol) {
@@ -634,6 +648,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     apiResponseCol,
     evalScoreCol,
     evalExplainCol,
+    ...(useCitations && citationsCol ? [citationsCol] : []),
   ].filter(Boolean);
   const otherHeaders = computeOtherHeaders(headers, primaryOrder);
 
@@ -795,6 +810,15 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 checkedColName ? ` (${checkedColName})` : ""
               }`}
             />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={useCitations}
+                  onChange={(e) => setUseCitations(e.target.checked)}
+                />
+              }
+              label="Enable citations"
+            />
             {/* <Button onClick={loadDemo}>Load demo</Button>
             <Button onClick={handleRunTests} variant="outlined">
               Run self‑tests
@@ -845,6 +869,15 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               onChange={(v) => setEvalExplainCol(v)}
               onEnsureCreate={(v) => ensureCol(v)}
             />
+            {useCitations && (
+              <HeaderAutocomplete
+                label="Citations column"
+                value={citationsCol}
+                options={headers}
+                onChange={(v) => setCitationsCol(v)}
+                onEnsureCreate={(v) => ensureCol(v)}
+              />
+            )}
           </Stack>
         </Paper>
 
@@ -976,6 +1009,49 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       />
                     )}
                   </Stack>
+
+                  {/* Citations JSON display - read-only */}
+                  {useCitations && citationsCol && currentRow[citationsCol] && (
+                    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f8f9fa" }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600, mb: 1, display: "block" }}
+                      >
+                        Citations ({citationsCol}) - Read Only
+                      </Typography>
+                      <Box
+                        component="pre"
+                        sx={{
+                          backgroundColor: "#2d3748",
+                          color: "#e2e8f0",
+                          padding: 2,
+                          borderRadius: 1,
+                          fontSize: "0.875rem",
+                          fontFamily: "Monaco, Menlo, 'Ubuntu Mono', monospace",
+                          overflow: "auto",
+                          maxHeight: "300px",
+                          margin: 0,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          "& .json-key": { color: "#81c7d4" },
+                          "& .json-string": { color: "#a8e6cf" },
+                          "& .json-number": { color: "#ffd3a5" },
+                          "& .json-boolean": { color: "#ffaaa5" },
+                          "& .json-null": { color: "#ff8b94" },
+                        }}
+                      >
+                        {(() => {
+                          try {
+                            const parsed = JSON.parse(currentRow[citationsCol]);
+                            return JSON.stringify(parsed, null, 2);
+                          } catch {
+                            return currentRow[citationsCol];
+                          }
+                        })()}
+                      </Box>
+                    </Box>
+                  )}
                 </Stack>
 
                 {/* Other columns below */}
