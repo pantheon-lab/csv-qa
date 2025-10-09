@@ -176,7 +176,7 @@ function HeaderAutocomplete({
           placeholder="Type a column name or pick one"
         />
       )}
-      sx={{ minWidth: 260, flex: 1, maxWidth: "100%" }}
+      sx={{ flex: 1, minWidth: 200 }}
     />
   );
 }
@@ -771,19 +771,19 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
       <Container maxWidth="xl" sx={{ py: 2 }}>
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack
-            direction={{ xs: "column", md: "row" }}
+            direction="row"
             spacing={2}
             useFlexGap
-            flexWrap="wrap"
+            flexWrap="nowrap"
             alignItems="stretch"
+            sx={{ overflowX: "auto" }}
           >
             <TextField
               label="File name"
               size="small"
               value={filename}
               onChange={(e) => setFilename(e.target.value)}
-              fullWidth
-              sx={{ minWidth: 260, flex: 1, maxWidth: "100%" }}
+              sx={{ flex: 1, minWidth: 200 }}
             />
             <HeaderAutocomplete
               label="Status column (TRUE/FALSE/INVALID/DISCUSS)"
@@ -809,6 +809,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               label={`Use checked column${
                 checkedColName ? ` (${checkedColName})` : ""
               }`}
+              sx={{ minWidth: 200, whiteSpace: "nowrap" }}
             />
             <FormControlLabel
               control={
@@ -818,6 +819,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 />
               }
               label="Enable citations"
+              sx={{ minWidth: 150, whiteSpace: "nowrap" }}
             />
             {/* <Button onClick={loadDemo}>Load demo</Button>
             <Button onClick={handleRunTests} variant="outlined">
@@ -828,11 +830,12 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
 
         <Paper sx={{ p: 2, mb: 2 }}>
           <Stack
-            direction={{ xs: "column", md: "row" }}
+            direction="row"
             spacing={2}
             useFlexGap
-            flexWrap="wrap"
+            flexWrap="nowrap"
             alignItems="stretch"
+            sx={{ overflowX: "auto" }}
           >
             <HeaderAutocomplete
               label="Question column"
