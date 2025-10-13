@@ -76,12 +76,21 @@ function useCsv() {
         const data = res.data || [];
         const hdrs = res.meta?.fields || Object.keys(data[0] || {});
         setHeaders(hdrs);
-        // normalize values to strings
-        const normalized = data.map((r) => {
-          const o = {};
-          hdrs.forEach((h) => (o[h] = r[h] == null ? "" : String(r[h])));
-          return o;
-        });
+        // normalize values to strings and filter out TOTAL rows
+        const normalized = data
+          .filter((r) => {
+            // Filter out TOTAL rows - check if first column contains "TOTAL"
+            const firstCol = hdrs[0];
+            const firstValue = String(r[firstCol] || "")
+              .trim()
+              .toUpperCase();
+            return firstValue !== "TOTAL";
+          })
+          .map((r) => {
+            const o = {};
+            hdrs.forEach((h) => (o[h] = r[h] == null ? "" : String(r[h])));
+            return o;
+          });
         setRows(normalized);
         setFilename(file.name.replace(/\.(csv|CSV)$/g, ""));
       },
@@ -325,6 +334,13 @@ export default function App() {
 
   // New: use _checked column toggle (default ON)
   const [useCheckedStatus, setUseCheckedStatus] = useState(true);
+  const [showFailedOnly, setShowFailedOnly] = useState(false); // NEW
+
+  // Moved UP so it exists before any helper referencing it
+  const checkedColName = useMemo(
+    () => (statusCol ? `${statusCol}_checked` : ""),
+    [statusCol]
+  );
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -338,20 +354,62 @@ export default function App() {
   const inputRef = useRef(null);
 
   const hasData = rows.length > 0;
+  // Updated helpers for fail filtering - always use original status column for filtering
+  const getEffectiveStatus = (row) => {
+    if (!row || !statusCol) return "";
+    const raw =
+      useCheckedStatus && checkedColName ? row[checkedColName] : row[statusCol];
+    return String(raw || "")
+      .trim()
+      .toUpperCase();
+  };
+
+  // New helper specifically for filtering - always uses original status column
+  const getOriginalStatus = (row) => {
+    if (!row || !statusCol) return "";
+    const raw = row[statusCol];
+    return String(raw || "")
+      .trim()
+      .toUpperCase();
+  };
+
+  const isFailStatus = (s) => s === "FALSE" || s === "FAIL";
+
+  const failingIndices = useMemo(() => {
+    if (!statusCol) return [];
+    return rows
+      .map((r, i) => (isFailStatus(getOriginalStatus(r)) ? i : -1))
+      .filter((i) => i >= 0);
+  }, [rows, statusCol]);
+
+  const displayedIndices = useMemo(
+    () => (showFailedOnly ? failingIndices : rows.map((_, i) => i)),
+    [showFailedOnly, failingIndices, rows]
+  );
+
+  // Adjust current row if filtered view hides it
+  useEffect(() => {
+    if (!showFailedOnly) return;
+    if (!isFailStatus(getOriginalStatus(rows[currentIdx]))) {
+      const next =
+        failingIndices.find((i) => i > currentIdx) ?? failingIndices[0];
+      if (next != null) setCurrentIdx(next);
+    }
+  }, [showFailedOnly, rows, currentIdx, failingIndices, statusCol]);
+
+  // Pagination now based on displayedIndices
   const pagedRows = useMemo(() => {
     const start = page * rowsPerPage;
-    return rows.slice(start, start + rowsPerPage);
-  }, [rows, page, rowsPerPage]);
+    const slice = displayedIndices.slice(start, start + rowsPerPage);
+    return slice.map((gi) => ({ row: rows[gi], globalIdx: gi }));
+  }, [displayedIndices, rows, page, rowsPerPage]);
+
+  const totalDisplayed = displayedIndices.length;
 
   const ensureCol = (name) => {
     if (!name) return;
     addColumnIfMissing(name, "");
   };
-
-  const checkedColName = useMemo(
-    () => (statusCol ? `${statusCol}_checked` : ""),
-    [statusCol]
-  );
 
   // When toggle ON and status column picked, auto-create the checked column
   useEffect(() => {
@@ -776,7 +834,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             useFlexGap
             flexWrap="nowrap"
             alignItems="stretch"
-            sx={{ overflowX: "auto" }}
           >
             <TextField
               label="File name"
@@ -821,6 +878,20 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               label="Enable citations"
               sx={{ minWidth: 150, whiteSpace: "nowrap" }}
             />
+            {/* NEW: Show only FAIL toggle */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showFailedOnly}
+                  onChange={(e) => {
+                    setShowFailedOnly(e.target.checked);
+                    setPage(0);
+                  }}
+                />
+              }
+              label="Show only FAIL"
+              sx={{ minWidth: 170, whiteSpace: "nowrap" }}
+            />
             {/* <Button onClick={loadDemo}>Load demo</Button>
             <Button onClick={handleRunTests} variant="outlined">
               Run self‑tests
@@ -835,7 +906,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             useFlexGap
             flexWrap="nowrap"
             alignItems="stretch"
-            sx={{ overflowX: "auto" }}
           >
             <HeaderAutocomplete
               label="Question column"
@@ -1157,8 +1227,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {pagedRows.map((row, idx) => {
-                        const globalIdx = page * rowsPerPage + idx;
+                      {pagedRows.map(({ row, globalIdx }) => {
                         return (
                           <TableRow
                             key={globalIdx}
@@ -1228,7 +1297,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 </TableContainer>
                 <TablePagination
                   component="div"
-                  count={rows.length}
+                  count={totalDisplayed} // changed
                   page={page}
                   onPageChange={(e, p) => setPage(p)}
                   rowsPerPage={rowsPerPage}
@@ -1269,8 +1338,22 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               <Tooltip title="Previous">
                 <span>
                   <IconButton
-                    disabled={currentIdx <= 0}
-                    onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
+                    disabled={
+                      showFailedOnly
+                        ? displayedIndices.filter((i) => i < currentIdx)
+                            .length === 0
+                        : currentIdx <= 0
+                    }
+                    onClick={() => {
+                      if (showFailedOnly) {
+                        const prev = [...displayedIndices]
+                          .filter((i) => i < currentIdx)
+                          .pop();
+                        if (prev != null) setCurrentIdx(prev);
+                      } else {
+                        setCurrentIdx((i) => Math.max(0, i - 1));
+                      }
+                    }}
                   >
                     <SkipPreviousIcon />
                   </IconButton>
@@ -1290,10 +1373,22 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               <Tooltip title="Next">
                 <span>
                   <IconButton
-                    disabled={currentIdx >= rows.length - 1}
-                    onClick={() =>
-                      setCurrentIdx((i) => Math.min(rows.length - 1, i + 1))
+                    disabled={
+                      showFailedOnly
+                        ? displayedIndices.filter((i) => i > currentIdx)
+                            .length === 0
+                        : currentIdx >= rows.length - 1
                     }
+                    onClick={() => {
+                      if (showFailedOnly) {
+                        const next = displayedIndices.find(
+                          (i) => i > currentIdx
+                        );
+                        if (next != null) setCurrentIdx(next);
+                      } else {
+                        setCurrentIdx((i) => Math.min(rows.length - 1, i + 1));
+                      }
+                    }}
                   >
                     <SkipNextIcon />
                   </IconButton>
