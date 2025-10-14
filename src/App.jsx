@@ -31,6 +31,9 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Select,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 // FIX: incorrect import path for UploadFileIcon
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -335,6 +338,9 @@ export default function App() {
   // New: use _checked column toggle (default ON)
   const [useCheckedStatus, setUseCheckedStatus] = useState(true);
   const [showFailedOnly, setShowFailedOnly] = useState(false); // NEW
+  const [showFailAndDiscuss, setShowFailAndDiscuss] = useState(false); // NEW toggle
+  const [filterByCheckedCol, setFilterByCheckedCol] = useState(false); // NEW: filter source toggle
+  const [showOptions, setShowOptions] = useState(false); // NEW: toggle to show/hide options
 
   // Moved UP so it exists before any helper referencing it
   const checkedColName = useMemo(
@@ -364,7 +370,18 @@ export default function App() {
       .toUpperCase();
   };
 
-  // New helper specifically for filtering - always uses original status column
+  // New helper specifically for filtering - uses either original or checked column based on toggle
+  const getFilterStatus = (row) => {
+    if (!row || !statusCol) return "";
+    const raw =
+      filterByCheckedCol && checkedColName
+        ? row[checkedColName]
+        : row[statusCol];
+    return String(raw || "")
+      .trim()
+      .toUpperCase();
+  };
+
   const getOriginalStatus = (row) => {
     if (!row || !statusCol) return "";
     const raw = row[statusCol];
@@ -374,28 +391,62 @@ export default function App() {
   };
 
   const isFailStatus = (s) => s === "FALSE" || s === "FAIL";
+  const isFailOrDiscussStatus = (s) =>
+    s === "FALSE" || s === "FAIL" || s === "DISCUSS";
 
   const failingIndices = useMemo(() => {
     if (!statusCol) return [];
     return rows
-      .map((r, i) => (isFailStatus(getOriginalStatus(r)) ? i : -1))
+      .map((r, i) => (isFailStatus(getFilterStatus(r)) ? i : -1))
       .filter((i) => i >= 0);
-  }, [rows, statusCol]);
+  }, [rows, statusCol, filterByCheckedCol, checkedColName]);
 
-  const displayedIndices = useMemo(
-    () => (showFailedOnly ? failingIndices : rows.map((_, i) => i)),
-    [showFailedOnly, failingIndices, rows]
-  );
+  // New: indices for FAIL and DISCUSS
+  const failAndDiscussIndices = useMemo(() => {
+    if (!statusCol) return [];
+    return rows
+      .map((r, i) => (isFailOrDiscussStatus(getFilterStatus(r)) ? i : -1))
+      .filter((i) => i >= 0);
+  }, [rows, statusCol, filterByCheckedCol, checkedColName]);
+
+  const displayedIndices = useMemo(() => {
+    if (showFailAndDiscuss) return failAndDiscussIndices;
+    if (showFailedOnly) return failingIndices;
+    return rows.map((_, i) => i);
+  }, [
+    showFailedOnly,
+    showFailAndDiscuss,
+    failingIndices,
+    failAndDiscussIndices,
+    rows,
+  ]);
 
   // Adjust current row if filtered view hides it
   useEffect(() => {
-    if (!showFailedOnly) return;
-    if (!isFailStatus(getOriginalStatus(rows[currentIdx]))) {
-      const next =
-        failingIndices.find((i) => i > currentIdx) ?? failingIndices[0];
-      if (next != null) setCurrentIdx(next);
+    if (showFailAndDiscuss) {
+      if (!isFailOrDiscussStatus(getFilterStatus(rows[currentIdx]))) {
+        const next =
+          failAndDiscussIndices.find((i) => i > currentIdx) ??
+          failAndDiscussIndices[0];
+        if (next != null) setCurrentIdx(next);
+      }
+    } else if (showFailedOnly) {
+      if (!isFailStatus(getFilterStatus(rows[currentIdx]))) {
+        const next =
+          failingIndices.find((i) => i > currentIdx) ?? failingIndices[0];
+        if (next != null) setCurrentIdx(next);
+      }
     }
-  }, [showFailedOnly, rows, currentIdx, failingIndices, statusCol]);
+  }, [
+    showFailedOnly,
+    showFailAndDiscuss,
+    rows,
+    currentIdx,
+    failingIndices,
+    failAndDiscussIndices,
+    statusCol,
+    filterByCheckedCol,
+  ]);
 
   // Pagination now based on displayedIndices
   const pagedRows = useMemo(() => {
@@ -733,6 +784,14 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             >
               Upload CSV
             </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => setShowOptions(!showOptions)}
+              sx={{ minWidth: 120 }}
+            >
+              {showOptions ? "Hide Options" : "Show Options"}
+            </Button>
             <input
               ref={inputRef}
               type="file"
@@ -740,13 +799,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               style={{ display: "none" }}
               onChange={(e) => loadCsvFile(e.target.files?.[0])}
             />
-            <Tooltip title="Export FAIL/DISCUSS only">
-              <span>
-                <IconButton disabled={!hasData} onClick={() => download(true)}>
-                  <ContentPasteSearchIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
             {/* Updated: consolidated download options */}
             {useCheckedStatus ? (
               <>
@@ -808,151 +860,247 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       secondary="Replace original column, remove checked column"
                     />
                   </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setDlAnchor(null);
+                      download(true);
+                    }}
+                  >
+                    <ListItemIcon>
+                      <ContentPasteSearchIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Export FAIL/DISCUSS only"
+                      secondary="Export only rows marked as FAIL or DISCUSS"
+                    />
+                  </MenuItem>
                 </Menu>
               </>
             ) : (
-              <Tooltip title="Export (full)">
-                <span>
-                  <IconButton
-                    disabled={!hasData}
-                    onClick={() => download(false)}
+              <>
+                <Button
+                  variant="outlined"
+                  onClick={(e) => setDlAnchor(e.currentTarget)}
+                  disabled={!hasData}
+                >
+                  Download
+                </Button>
+                <Menu
+                  anchorEl={dlAnchor}
+                  open={!!dlAnchor}
+                  onClose={() => setDlAnchor(null)}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setDlAnchor(null);
+                      download(false);
+                    }}
                   >
-                    <FileDownloadIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
+                    <ListItemIcon>
+                      <FileDownloadIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Full CSV"
+                      secondary="Export all data"
+                    />
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setDlAnchor(null);
+                      download(true);
+                    }}
+                  >
+                    <ListItemIcon>
+                      <ContentPasteSearchIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText
+                      primary="Export FAIL/DISCUSS only"
+                      secondary="Export only rows marked as FAIL or DISCUSS"
+                    />
+                  </MenuItem>
+                </Menu>
+              </>
             )}
           </Stack>
         </Toolbar>
       </AppBar>
 
       <Container maxWidth="xl" sx={{ py: 2 }}>
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Stack
-            direction="row"
-            spacing={2}
-            useFlexGap
-            flexWrap="nowrap"
-            alignItems="stretch"
-          >
-            <TextField
-              label="File name"
-              size="small"
-              value={filename}
-              onChange={(e) => setFilename(e.target.value)}
-              sx={{ flex: 1, minWidth: 200 }}
-            />
-            <HeaderAutocomplete
-              label="Status column (TRUE/FALSE/INVALID/DISCUSS)"
-              value={statusCol}
-              options={headers}
-              onChange={(v) => setStatusCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <HeaderAutocomplete
-              label="Comment column (type to create new)"
-              value={commentCol}
-              options={headers}
-              onChange={(v) => setCommentCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={useCheckedStatus}
-                  onChange={(e) => setUseCheckedStatus(e.target.checked)}
+        {showOptions && (
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Stack spacing={2}>
+              {/* First row: File name and column selectors */}
+              <Stack
+                direction="row"
+                spacing={2}
+                useFlexGap
+                flexWrap="nowrap"
+                alignItems="stretch"
+              >
+                <TextField
+                  label="File name"
+                  size="small"
+                  value={filename}
+                  onChange={(e) => setFilename(e.target.value)}
+                  sx={{ flex: 1, minWidth: 200 }}
                 />
-              }
-              label={`Use checked column${
-                checkedColName ? ` (${checkedColName})` : ""
-              }`}
-              sx={{ minWidth: 200, whiteSpace: "nowrap" }}
-            />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={useCitations}
-                  onChange={(e) => setUseCitations(e.target.checked)}
+                <HeaderAutocomplete
+                  label="Status column (TRUE/FALSE/INVALID/DISCUSS)"
+                  value={statusCol}
+                  options={headers}
+                  onChange={(v) => setStatusCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
                 />
-              }
-              label="Enable citations"
-              sx={{ minWidth: 150, whiteSpace: "nowrap" }}
-            />
-            {/* NEW: Show only FAIL toggle */}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showFailedOnly}
-                  onChange={(e) => {
-                    setShowFailedOnly(e.target.checked);
-                    setPage(0);
-                  }}
+                <HeaderAutocomplete
+                  label="Comment column (type to create new)"
+                  value={commentCol}
+                  options={headers}
+                  onChange={(v) => setCommentCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
                 />
-              }
-              label="Show only FAIL"
-              sx={{ minWidth: 170, whiteSpace: "nowrap" }}
-            />
-            {/* <Button onClick={loadDemo}>Load demo</Button>
-            <Button onClick={handleRunTests} variant="outlined">
-              Run self‑tests
-            </Button> */}
-          </Stack>
-        </Paper>
+              </Stack>
 
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Stack
-            direction="row"
-            spacing={2}
-            useFlexGap
-            flexWrap="nowrap"
-            alignItems="stretch"
-          >
-            <HeaderAutocomplete
-              label="Question column"
-              value={questionCol}
-              options={headers}
-              onChange={(v) => setQuestionCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <HeaderAutocomplete
-              label="Expected answer column"
-              value={expectedCol}
-              options={headers}
-              onChange={(v) => setExpectedCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <HeaderAutocomplete
-              label="API response column"
-              value={apiResponseCol}
-              options={headers}
-              onChange={(v) => setApiResponseCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <HeaderAutocomplete
-              label="Evaluation score column"
-              value={evalScoreCol}
-              options={headers}
-              onChange={(v) => setEvalScoreCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            <HeaderAutocomplete
-              label="Evaluation explanation column"
-              value={evalExplainCol}
-              options={headers}
-              onChange={(v) => setEvalExplainCol(v)}
-              onEnsureCreate={(v) => ensureCol(v)}
-            />
-            {useCitations && (
+              {/* Second row: All toggles and filter selector */}
+              <Stack
+                direction="row"
+                spacing={2}
+                useFlexGap
+                flexWrap="nowrap"
+                alignItems="stretch"
+              >
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useCheckedStatus}
+                      onChange={(e) => setUseCheckedStatus(e.target.checked)}
+                    />
+                  }
+                  label="Use checked column"
+                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useCitations}
+                      onChange={(e) => setUseCitations(e.target.checked)}
+                    />
+                  }
+                  label="Enable citations"
+                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
+                />
+                {/* Show only FAIL toggle */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFailedOnly}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowFailAndDiscuss(false); // Disable the other filter
+                        }
+                        setShowFailedOnly(e.target.checked);
+                        setPage(0);
+                      }}
+                    />
+                  }
+                  label="Show only FAIL"
+                  sx={{ minWidth: 140, whiteSpace: "nowrap" }}
+                />
+                {/* Show FAIL and DISCUSS toggle */}
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFailAndDiscuss}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowFailedOnly(false); // Disable the other filter
+                        }
+                        setShowFailAndDiscuss(e.target.checked);
+                        setPage(0);
+                      }}
+                    />
+                  }
+                  label="Show FAIL + DISCUSS"
+                  sx={{ minWidth: 160, whiteSpace: "nowrap" }}
+                />
+                {/* Fixed filter source selector */}
+                <FormControl sx={{ minWidth: 180 }} size="small">
+                  <InputLabel>Filter by column</InputLabel>
+                  <Select
+                    value={filterByCheckedCol ? "checked" : "original"}
+                    onChange={(e) => {
+                      setFilterByCheckedCol(e.target.value === "checked");
+                      setPage(0);
+                    }}
+                    label="Filter by column"
+                    disabled={
+                      (!showFailedOnly && !showFailAndDiscuss) ||
+                      !checkedColName
+                    }
+                  >
+                    <MenuItem value="original">Original</MenuItem>
+                    <MenuItem value="checked">Checked</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
+            </Stack>
+          </Paper>
+        )}
+        {showOptions && (
+          <Paper sx={{ p: 2, mb: 2 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              useFlexGap
+              flexWrap="nowrap"
+              alignItems="stretch"
+            >
               <HeaderAutocomplete
-                label="Citations column"
-                value={citationsCol}
+                label="Question column"
+                value={questionCol}
                 options={headers}
-                onChange={(v) => setCitationsCol(v)}
+                onChange={(v) => setQuestionCol(v)}
                 onEnsureCreate={(v) => ensureCol(v)}
               />
-            )}
-          </Stack>
-        </Paper>
+              <HeaderAutocomplete
+                label="Expected answer column"
+                value={expectedCol}
+                options={headers}
+                onChange={(v) => setExpectedCol(v)}
+                onEnsureCreate={(v) => ensureCol(v)}
+              />
+              <HeaderAutocomplete
+                label="API response column"
+                value={apiResponseCol}
+                options={headers}
+                onChange={(v) => setApiResponseCol(v)}
+                onEnsureCreate={(v) => ensureCol(v)}
+              />
+              <HeaderAutocomplete
+                label="Evaluation score column"
+                value={evalScoreCol}
+                options={headers}
+                onChange={(v) => setEvalScoreCol(v)}
+                onEnsureCreate={(v) => ensureCol(v)}
+              />
+              <HeaderAutocomplete
+                label="Evaluation explanation column"
+                value={evalExplainCol}
+                options={headers}
+                onChange={(v) => setEvalExplainCol(v)}
+                onEnsureCreate={(v) => ensureCol(v)}
+              />
+              {useCitations && (
+                <HeaderAutocomplete
+                  label="Citations column"
+                  value={citationsCol}
+                  options={headers}
+                  onChange={(v) => setCitationsCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+              )}
+            </Stack>
+          </Paper>
+        )}
 
         <Paper sx={{ p: 0, mb: 2 }}>
           <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="fullWidth">
@@ -1339,13 +1487,18 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 <span>
                   <IconButton
                     disabled={
-                      showFailedOnly
-                        ? displayedIndices.filter((i) => i < currentIdx)
-                            .length === 0
-                        : currentIdx <= 0
+                      (showFailAndDiscuss &&
+                        displayedIndices.filter((i) => i < currentIdx)
+                          .length === 0) ||
+                      (showFailedOnly &&
+                        displayedIndices.filter((i) => i < currentIdx)
+                          .length === 0) ||
+                      (!showFailedOnly &&
+                        !showFailAndDiscuss &&
+                        currentIdx <= 0)
                     }
                     onClick={() => {
-                      if (showFailedOnly) {
+                      if (showFailAndDiscuss || showFailedOnly) {
                         const prev = [...displayedIndices]
                           .filter((i) => i < currentIdx)
                           .pop();
@@ -1374,13 +1527,18 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 <span>
                   <IconButton
                     disabled={
-                      showFailedOnly
-                        ? displayedIndices.filter((i) => i > currentIdx)
-                            .length === 0
-                        : currentIdx >= rows.length - 1
+                      (showFailAndDiscuss &&
+                        displayedIndices.filter((i) => i > currentIdx)
+                          .length === 0) ||
+                      (showFailedOnly &&
+                        displayedIndices.filter((i) => i > currentIdx)
+                          .length === 0) ||
+                      (!showFailedOnly &&
+                        !showFailAndDiscuss &&
+                        currentIdx >= rows.length - 1)
                     }
                     onClick={() => {
-                      if (showFailedOnly) {
+                      if (showFailAndDiscuss || showFailedOnly) {
                         const next = displayedIndices.find(
                           (i) => i > currentIdx
                         );
