@@ -485,8 +485,25 @@ export default function App() {
       if (i >= 0) setStatusCol(headers[i]);
     }
     if (!commentCol) {
-      const i = lower.indexOf("qaremarks");
-      if (i >= 0) setCommentCol(headers[i]);
+      // Updated: Look for multiple comment column variations
+      const commentCandidates = [
+        "comment",
+        "comments",
+        "qaremarks",
+        "remarks",
+        "notes",
+      ];
+      let commentIndex = -1;
+      for (const candidate of commentCandidates) {
+        commentIndex = lower.indexOf(candidate);
+        if (commentIndex >= 0) break;
+      }
+      if (commentIndex >= 0) {
+        setCommentCol(headers[commentIndex]);
+      } else {
+        // If no existing column found, set default name that will be created when used
+        setCommentCol("comment");
+      }
     }
 
     // Auto-detect existing checked columns when status column is set
