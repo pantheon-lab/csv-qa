@@ -1144,13 +1144,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 {/* Status + Comment */}
                 {statusCol && (
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Status{" "}
-                      {useCheckedStatus && checkedColName
-                        ? `(editing ${checkedColName})`
-                        : ""}
-                      :
-                    </Typography>
                     {useCheckedStatus && checkedColName ? (
                       <Stack
                         direction="row"
