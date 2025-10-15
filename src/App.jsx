@@ -1141,10 +1141,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               </Box>
             ) : (
               <Stack spacing={2}>
-                {/* Remove the navigation bar from here */}
-
-                <Divider />
-
                 {/* Status + Comment */}
                 {statusCol && (
                   <Stack direction="row" spacing={1} alignItems="center">
