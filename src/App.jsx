@@ -46,6 +46,8 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import ForumIcon from "@mui/icons-material/Forum";
 import ContentPasteSearchIcon from "@mui/icons-material/ContentPasteSearch";
 import ClearIcon from "@mui/icons-material/Clear";
+import SettingsIcon from "@mui/icons-material/Settings";
+import LinkIcon from "@mui/icons-material/Link";
 import Papa from "papaparse";
 
 /**
@@ -341,6 +343,17 @@ export default function App() {
   const [showFailAndDiscuss, setShowFailAndDiscuss] = useState(false); // NEW toggle
   const [filterByCheckedCol, setFilterByCheckedCol] = useState(false); // NEW: filter source toggle
   const [showOptions, setShowOptions] = useState(false); // NEW: toggle to show/hide options
+
+  // New: Settings dialog state
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [settingsJson, setSettingsJson] = useState("");
+  const [settingsMode, setSettingsMode] = useState("text"); // 'text' or 'url'
+  const [csvUrlInput, setCsvUrlInput] = useState("");
+  const [csvUrlDialogOpen, setCsvUrlDialogOpen] = useState(false);
+
+  // New: Track URLs loaded from parameters
+  const [loadedJsonUrl, setLoadedJsonUrl] = useState("");
+  const [loadedCsvUrl, setLoadedCsvUrl] = useState("");
 
   // Moved UP so it exists before any helper referencing it
   const checkedColName = useMemo(
@@ -786,6 +799,196 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     setTestMsg(msg);
   };
 
+  // Add new helper function to fetch from URL
+  async function fetchFromUrl(url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.text();
+    } catch (error) {
+      throw new Error(`Failed to fetch from URL: ${error.message}`);
+    }
+  }
+
+  // New: Generate settings JSON
+  const generateSettingsJson = () => {
+    const settings = {
+      statusCol,
+      commentCol,
+      questionCol,
+      expectedCol,
+      apiResponseCol,
+      evalScoreCol,
+      evalExplainCol,
+      citationsCol,
+      useCitations,
+      useCheckedStatus,
+      showFailedOnly,
+      showFailAndDiscuss,
+      filterByCheckedCol,
+    };
+    return JSON.stringify(settings, null, 2);
+  };
+
+  // New: Export settings as JSON
+  const exportSettings = () => {
+    const json = generateSettingsJson();
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${filename || "qa"}_settings.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setSnack("Settings exported successfully");
+  };
+
+  // New: Import settings from JSON
+  const importSettings = async (jsonText) => {
+    try {
+      const settings = JSON.parse(jsonText);
+      if (settings.statusCol !== undefined) setStatusCol(settings.statusCol);
+      if (settings.commentCol !== undefined) setCommentCol(settings.commentCol);
+      if (settings.questionCol !== undefined)
+        setQuestionCol(settings.questionCol);
+      if (settings.expectedCol !== undefined)
+        setExpectedCol(settings.expectedCol);
+      if (settings.apiResponseCol !== undefined)
+        setApiResponseCol(settings.apiResponseCol);
+      if (settings.evalScoreCol !== undefined)
+        setEvalScoreCol(settings.evalScoreCol);
+      if (settings.evalExplainCol !== undefined)
+        setEvalExplainCol(settings.evalExplainCol);
+      if (settings.citationsCol !== undefined)
+        setCitationsCol(settings.citationsCol);
+      if (settings.useCitations !== undefined)
+        setUseCitations(settings.useCitations);
+      if (settings.useCheckedStatus !== undefined)
+        setUseCheckedStatus(settings.useCheckedStatus);
+      if (settings.showFailedOnly !== undefined)
+        setShowFailedOnly(settings.showFailedOnly);
+      if (settings.showFailAndDiscuss !== undefined)
+        setShowFailAndDiscuss(settings.showFailAndDiscuss);
+      if (settings.filterByCheckedCol !== undefined)
+        setFilterByCheckedCol(settings.filterByCheckedCol);
+
+      setSnack("Settings imported successfully");
+      setSettingsDialogOpen(false);
+      // Remove this line: setShowOptions(true);
+    } catch (error) {
+      setSnack(`Failed to import settings: ${error.message}`);
+    }
+  };
+
+  // New: Handle settings import
+  const handleSettingsImport = async () => {
+    try {
+      if (settingsMode === "text") {
+        await importSettings(settingsJson);
+      } else {
+        const jsonText = await fetchFromUrl(settingsJson);
+        await importSettings(jsonText);
+        setLoadedJsonUrl(settingsJson); // Track the loaded URL
+      }
+    } catch (error) {
+      setSnack(`Error: ${error.message}`);
+    }
+  };
+
+  // New: Load CSV from URL
+  const loadCsvFromUrl = async (url) => {
+    try {
+      const csvText = await fetchFromUrl(url);
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (h) => h.trim(),
+        complete: (res) => {
+          const data = res.data || [];
+          const hdrs = res.meta?.fields || Object.keys(data[0] || {});
+          setHeaders(hdrs);
+          const normalized = data
+            .filter((r) => {
+              const firstCol = hdrs[0];
+              const firstValue = String(r[firstCol] || "")
+                .trim()
+                .toUpperCase();
+              return firstValue !== "TOTAL";
+            })
+            .map((r) => {
+              const o = {};
+              hdrs.forEach((h) => (o[h] = r[h] == null ? "" : String(r[h])));
+              return o;
+            });
+          setRows(normalized);
+          const urlFilename = url
+            .split("/")
+            .pop()
+            .replace(/\.(csv|CSV)$/g, "");
+          setFilename(urlFilename);
+          setSnack(`CSV loaded from URL: ${normalized.length} rows`);
+          setCsvUrlDialogOpen(false);
+          setLoadedCsvUrl(url); // Track the loaded URL
+        },
+        error: (err) => setSnack("CSV parse error: " + err.message),
+      });
+    } catch (error) {
+      setSnack(`Error loading CSV: ${error.message}`);
+    }
+  };
+
+  // New: Parse URL parameters on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const jsonUrl = params.get("json");
+    const csvUrl = params.get("csv");
+
+    const loadFromUrls = async () => {
+      try {
+        // Load settings first if provided
+        if (jsonUrl) {
+          setLoadedJsonUrl(jsonUrl);
+          const jsonText = await fetchFromUrl(jsonUrl);
+          await importSettings(jsonText);
+        }
+
+        // Then load CSV if provided
+        if (csvUrl) {
+          setLoadedCsvUrl(csvUrl);
+          await loadCsvFromUrl(csvUrl);
+        }
+      } catch (error) {
+        setSnack(`Error loading from URL parameters: ${error.message}`);
+      }
+    };
+
+    if (jsonUrl || csvUrl) {
+      loadFromUrls();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // New: Copy shareable link
+  const copyShareableLink = () => {
+    const baseUrl = window.location.origin + window.location.pathname;
+    const params = new URLSearchParams();
+
+    if (loadedJsonUrl) {
+      params.append("json", loadedJsonUrl);
+    }
+    if (loadedCsvUrl) {
+      params.append("csv", loadedCsvUrl);
+    }
+
+    const shareUrl = params.toString()
+      ? `${baseUrl}?${params.toString()}`
+      : baseUrl;
+
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setSnack("Shareable link copied to clipboard");
+    });
+  };
+
   return (
     <Box sx={{ bgcolor: "#f6f8fb", minHeight: "100vh" }}>
       <AppBar position="static" color="default" elevation={0}>
@@ -802,6 +1005,23 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               Upload CSV
             </Button>
             <Button
+              startIcon={<LinkIcon />}
+              variant="outlined"
+              onClick={() => setCsvUrlDialogOpen(true)}
+            >
+              Load from URL
+            </Button>
+            <Button
+              startIcon={<SettingsIcon />}
+              variant="outlined"
+              onClick={() => {
+                setSettingsJson(generateSettingsJson());
+                setSettingsDialogOpen(true);
+              }}
+            >
+              Settings
+            </Button>
+            <Button
               variant="outlined"
               size="small"
               onClick={() => setShowOptions(!showOptions)}
@@ -816,7 +1036,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               style={{ display: "none" }}
               onChange={(e) => loadCsvFile(e.target.files?.[0])}
             />
-            {/* Updated: consolidated download options */}
             {useCheckedStatus ? (
               <>
                 <Button
@@ -1618,6 +1837,124 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
         <Alert severity="warning" onClose={() => setSnack("")}>
           {snack}
         </Alert>
+      </Snackbar>
+
+      {/* New: Settings Dialog */}
+      <Snackbar
+        open={settingsDialogOpen}
+        onClose={() => setSettingsDialogOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{ maxWidth: "80vw", width: 800 }}
+      >
+        <Paper sx={{ p: 3, width: "100%" }}>
+          <Stack spacing={2}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant="h6">Import/Export Settings</Typography>
+              <IconButton
+                size="small"
+                onClick={() => setSettingsDialogOpen(false)}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+
+            <Tabs
+              value={settingsMode}
+              onChange={(e, v) => {
+                setSettingsMode(v);
+                // Clear text when switching modes and set appropriate default
+                if (v === "url") {
+                  setSettingsJson(loadedJsonUrl || "");
+                } else {
+                  setSettingsJson(generateSettingsJson());
+                }
+              }}
+            >
+              <Tab label="Text/Paste JSON" value="text" />
+              <Tab label="Load from URL" value="url" />
+            </Tabs>
+
+            <TextField
+              label={settingsMode === "text" ? "Settings JSON" : "JSON URL"}
+              value={settingsJson}
+              onChange={(e) => setSettingsJson(e.target.value)}
+              multiline={settingsMode === "text"}
+              minRows={settingsMode === "text" ? 10 : 1}
+              fullWidth
+              sx={wrapSx}
+              placeholder={
+                settingsMode === "text"
+                  ? "Paste settings JSON here or click Export to see current settings"
+                  : "https://example.com/settings.json"
+              }
+            />
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button onClick={exportSettings} startIcon={<FileDownloadIcon />}>
+                Export Current
+              </Button>
+              <Button onClick={copyShareableLink} startIcon={<LinkIcon />}>
+                Copy Share Link
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSettingsImport}
+                disabled={!settingsJson.trim()}
+              >
+                Import Settings
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      </Snackbar>
+
+      {/* New: CSV URL Dialog */}
+      <Snackbar
+        open={csvUrlDialogOpen}
+        onClose={() => setCsvUrlDialogOpen(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        sx={{ maxWidth: "80vw", width: 600 }}
+      >
+        <Paper sx={{ p: 3, width: "100%" }}>
+          <Stack spacing={2}>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant="h6">Load CSV from URL</Typography>
+              <IconButton
+                size="small"
+                onClick={() => setCsvUrlDialogOpen(false)}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Stack>
+
+            <TextField
+              label="CSV URL"
+              value={csvUrlInput}
+              onChange={(e) => setCsvUrlInput(e.target.value)}
+              fullWidth
+              placeholder="https://example.com/data.csv"
+            />
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button onClick={() => setCsvUrlDialogOpen(false)}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={() => loadCsvFromUrl(csvUrlInput)}
+                disabled={!csvUrlInput.trim()}
+              >
+                Load CSV
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
       </Snackbar>
     </Box>
   );
