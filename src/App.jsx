@@ -998,6 +998,23 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     });
   };
 
+  // Add beforeunload event listener to warn users before closing
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (hasData) {
+        e.preventDefault();
+        e.returnValue = ""; // Chrome requires returnValue to be set
+        return ""; // Some browsers require a return value
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasData]);
+
   return (
     <Box sx={{ bgcolor: "#f6f8fb", minHeight: "100vh" }}>
       <AppBar position="static" color="default" elevation={0}>
