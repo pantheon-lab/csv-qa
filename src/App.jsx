@@ -955,6 +955,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
         // Then load CSV if provided
         if (csvUrl) {
           setLoadedCsvUrl(csvUrl);
+          setCsvUrlInput(csvUrl);
           await loadCsvFromUrl(csvUrl);
         }
       } catch (error) {
