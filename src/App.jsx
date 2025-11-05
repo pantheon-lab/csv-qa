@@ -1267,32 +1267,44 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       onChange={(v) => setCell(currentIdx, apiResponseCol, v)}
                     />
                   )}
-                  <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                    {evalScoreCol && (
-                      <FieldBlock
-                        title={
-                          hideFieldTitles
-                            ? evalScoreCol
-                            : `Evaluation Score (${evalScoreCol})`
-                        }
-                        color="#f5f5f5"
-                        value={currentRow[evalScoreCol]}
-                        onChange={(v) => setCell(currentIdx, evalScoreCol, v)}
-                      />
-                    )}
-                    {evalExplainCol && (
-                      <FieldBlock
-                        title={
-                          hideFieldTitles
-                            ? evalExplainCol
-                            : `Evaluation Explanation (${evalExplainCol})`
-                        }
-                        color="#f5f5f5"
-                        value={currentRow[evalExplainCol]}
-                        onChange={(v) => setCell(currentIdx, evalExplainCol, v)}
-                      />
-                    )}
-                  </Stack>
+                  {/* Evaluation Score and Explanation in same row */}
+                  {(evalScoreCol || evalExplainCol) && (
+                    <Stack direction="row" spacing={1.5}>
+                      {evalScoreCol && (
+                        <Box sx={{ width: 200, flexShrink: 0 }}>
+                          <FieldBlock
+                            title={
+                              hideFieldTitles
+                                ? evalScoreCol
+                                : `Evaluation Score (${evalScoreCol})`
+                            }
+                            color="#f5f5f5"
+                            value={currentRow[evalScoreCol]}
+                            onChange={(v) =>
+                              setCell(currentIdx, evalScoreCol, v)
+                            }
+                            multiline={false}
+                          />
+                        </Box>
+                      )}
+                      {evalExplainCol && (
+                        <Box sx={{ flex: 1 }}>
+                          <FieldBlock
+                            title={
+                              hideFieldTitles
+                                ? evalExplainCol
+                                : `Evaluation Explanation (${evalExplainCol})`
+                            }
+                            color="#f5f5f5"
+                            value={currentRow[evalExplainCol]}
+                            onChange={(v) =>
+                              setCell(currentIdx, evalExplainCol, v)
+                            }
+                          />
+                        </Box>
+                      )}
+                    </Stack>
+                  )}
 
                   {/* Citations JSON display - read-only */}
                   {useCitations && citationsCol && currentRow[citationsCol] && (
