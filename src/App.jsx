@@ -34,6 +34,10 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 // FIX: incorrect import path for UploadFileIcon
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -48,6 +52,7 @@ import ContentPasteSearchIcon from "@mui/icons-material/ContentPasteSearch";
 import ClearIcon from "@mui/icons-material/Clear";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LinkIcon from "@mui/icons-material/Link";
+import TuneIcon from "@mui/icons-material/Tune";
 import Papa from "papaparse";
 
 /**
@@ -343,14 +348,14 @@ export default function App() {
   const [showFailAndDiscuss, setShowFailAndDiscuss] = useState(false);
   const [filterByCheckedCol, setFilterByCheckedCol] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
-  const [hideFieldTitles, setHideFieldTitles] = useState(false); // NEW
+  const [hideFieldTitles, setHideFieldTitles] = useState(false);
 
   // New: Settings dialog state
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState(0); // 0=Options, 1=Import/Export, 2=Load CSV
   const [settingsJson, setSettingsJson] = useState("");
   const [settingsMode, setSettingsMode] = useState("text"); // 'text' or 'url'
   const [csvUrlInput, setCsvUrlInput] = useState("");
-  const [csvUrlDialogOpen, setCsvUrlDialogOpen] = useState(false);
 
   // New: Track URLs loaded from parameters
   const [loadedJsonUrl, setLoadedJsonUrl] = useState("");
@@ -930,7 +935,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             .replace(/\.(csv|CSV)$/g, "");
           setFilename(urlFilename);
           setSnack(`CSV loaded from URL: ${normalized.length} rows`);
-          setCsvUrlDialogOpen(false);
+          // setCsvUrlDialogOpen(false);
           setLoadedCsvUrl(url); // Track the loaded URL
         },
         error: (err) => setSnack("CSV parse error: " + err.message),
@@ -1009,29 +1014,14 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               Upload CSV
             </Button>
             <Button
-              startIcon={<LinkIcon />}
-              variant="outlined"
-              onClick={() => setCsvUrlDialogOpen(true)}
-            >
-              Load from URL
-            </Button>
-            <Button
               startIcon={<SettingsIcon />}
               variant="outlined"
               onClick={() => {
-                setSettingsJson(generateSettingsJson());
+                setSettingsTab(0);
                 setSettingsDialogOpen(true);
               }}
             >
               Settings
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => setShowOptions(!showOptions)}
-              sx={{ minWidth: 120 }}
-            >
-              {showOptions ? "Hide Options" : "Show Options"}
             </Button>
             <input
               ref={inputRef}
@@ -1166,192 +1156,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
       </AppBar>
 
       <Container maxWidth="xl" sx={{ py: 2 }}>
-        {showOptions && (
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Stack spacing={2}>
-              {/* First row: File name and column selectors */}
-              <Stack
-                direction="row"
-                spacing={2}
-                useFlexGap
-                flexWrap="nowrap"
-                alignItems="stretch"
-              >
-                <TextField
-                  label="File name"
-                  size="small"
-                  value={filename}
-                  onChange={(e) => setFilename(e.target.value)}
-                  sx={{ flex: 1, minWidth: 200 }}
-                />
-                <HeaderAutocomplete
-                  label="Status column (TRUE/FALSE/INVALID/DISCUSS)"
-                  value={statusCol}
-                  options={headers}
-                  onChange={(v) => setStatusCol(v)}
-                  onEnsureCreate={(v) => ensureCol(v)}
-                />
-                <HeaderAutocomplete
-                  label="Comment column (type to create new)"
-                  value={commentCol}
-                  options={headers}
-                  onChange={(v) => setCommentCol(v)}
-                  onEnsureCreate={(v) => ensureCol(v)}
-                />
-              </Stack>
-
-              {/* Second row: All toggles and filter selector */}
-              <Stack
-                direction="row"
-                spacing={2}
-                useFlexGap
-                flexWrap="nowrap"
-                alignItems="stretch"
-              >
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={useCheckedStatus}
-                      onChange={(e) => setUseCheckedStatus(e.target.checked)}
-                    />
-                  }
-                  label="Use checked column"
-                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={useCitations}
-                      onChange={(e) => setUseCitations(e.target.checked)}
-                    />
-                  }
-                  label="Enable citations"
-                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
-                />
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={hideFieldTitles}
-                      onChange={(e) => setHideFieldTitles(e.target.checked)}
-                    />
-                  }
-                  label="Hide field titles"
-                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
-                />
-                {/* Show only FAIL toggle */}
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={showFailedOnly}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setShowFailAndDiscuss(false);
-                        }
-                        setShowFailedOnly(e.target.checked);
-                        setPage(0);
-                      }}
-                    />
-                  }
-                  label="Show only FAIL"
-                  sx={{ minWidth: 140, whiteSpace: "nowrap" }}
-                />
-                {/* Show FAIL and DISCUSS toggle */}
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={showFailAndDiscuss}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setShowFailedOnly(false); // Disable the other filter
-                        }
-                        setShowFailAndDiscuss(e.target.checked);
-                        setPage(0);
-                      }}
-                    />
-                  }
-                  label="Show FAIL + DISCUSS"
-                  sx={{ minWidth: 160, whiteSpace: "nowrap" }}
-                />
-                {/* Fixed filter source selector */}
-                <FormControl sx={{ minWidth: 180 }} size="small">
-                  <InputLabel>Filter by column</InputLabel>
-                  <Select
-                    value={filterByCheckedCol ? "checked" : "original"}
-                    onChange={(e) => {
-                      setFilterByCheckedCol(e.target.value === "checked");
-                      setPage(0);
-                    }}
-                    label="Filter by column"
-                    disabled={
-                      (!showFailedOnly && !showFailAndDiscuss) ||
-                      !checkedColName
-                    }
-                  >
-                    <MenuItem value="original">Original</MenuItem>
-                    <MenuItem value="checked">Checked</MenuItem>
-                  </Select>
-                </FormControl>
-              </Stack>
-            </Stack>
-          </Paper>
-        )}
-        {showOptions && (
-          <Paper sx={{ p: 2, mb: 2 }}>
-            <Stack
-              direction="row"
-              spacing={2}
-              useFlexGap
-              flexWrap="nowrap"
-              alignItems="stretch"
-            >
-              <HeaderAutocomplete
-                label="Question column"
-                value={questionCol}
-                options={headers}
-                onChange={(v) => setQuestionCol(v)}
-                onEnsureCreate={(v) => ensureCol(v)}
-              />
-              <HeaderAutocomplete
-                label="Expected answer column"
-                value={expectedCol}
-                options={headers}
-                onChange={(v) => setExpectedCol(v)}
-                onEnsureCreate={(v) => ensureCol(v)}
-              />
-              <HeaderAutocomplete
-                label="API response column"
-                value={apiResponseCol}
-                options={headers}
-                onChange={(v) => setApiResponseCol(v)}
-                onEnsureCreate={(v) => ensureCol(v)}
-              />
-              <HeaderAutocomplete
-                label="Evaluation score column"
-                value={evalScoreCol}
-                options={headers}
-                onChange={(v) => setEvalScoreCol(v)}
-                onEnsureCreate={(v) => ensureCol(v)}
-              />
-              <HeaderAutocomplete
-                label="Evaluation explanation column"
-                value={evalExplainCol}
-                options={headers}
-                onChange={(v) => setEvalExplainCol(v)}
-                onEnsureCreate={(v) => ensureCol(v)}
-              />
-              {useCitations && (
-                <HeaderAutocomplete
-                  label="Citations column"
-                  value={citationsCol}
-                  options={headers}
-                  onChange={(v) => setCitationsCol(v)}
-                  onEnsureCreate={(v) => ensureCol(v)}
-                />
-              )}
-            </Stack>
-          </Paper>
-        )}
-
         <Paper sx={{ p: 0, mb: 2 }}>
           <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="fullWidth">
             <Tab label="Row QA" />
@@ -1876,123 +1680,321 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
         </Alert>
       </Snackbar>
 
-      {/* New: Settings Dialog */}
-      <Snackbar
+      {/* Unified Settings Dialog */}
+      <Dialog
         open={settingsDialogOpen}
         onClose={() => setSettingsDialogOpen(false)}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        sx={{ maxWidth: "80vw", width: 800 }}
+        maxWidth="md"
+        fullWidth
       >
-        <Paper sx={{ p: 3, width: "100%" }}>
-          <Stack spacing={2}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
+        <DialogTitle>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography variant="h6">Settings</Typography>
+            <IconButton
+              size="small"
+              onClick={() => setSettingsDialogOpen(false)}
             >
-              <Typography variant="h6">Import/Export Settings</Typography>
-              <IconButton
-                size="small"
-                onClick={() => setSettingsDialogOpen(false)}
-              >
-                <CloseIcon />
-              </IconButton>
-            </Stack>
-
-            <Tabs
-              value={settingsMode}
-              onChange={(e, v) => {
-                setSettingsMode(v);
-                // Clear text when switching modes and set appropriate default
-                if (v === "url") {
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Tabs
+            value={settingsTab}
+            onChange={(e, v) => {
+              setSettingsTab(v);
+              // Update appropriate state when switching to Import/Export tab
+              if (v === 1) {
+                if (settingsMode === "url") {
                   setSettingsJson(loadedJsonUrl || "");
                 } else {
                   setSettingsJson(generateSettingsJson());
                 }
-              }}
-            >
-              <Tab label="Text/Paste JSON" value="text" />
-              <Tab label="Load from URL" value="url" />
-            </Tabs>
-
-            <TextField
-              label={settingsMode === "text" ? "Settings JSON" : "JSON URL"}
-              value={settingsJson}
-              onChange={(e) => setSettingsJson(e.target.value)}
-              multiline={settingsMode === "text"}
-              minRows={settingsMode === "text" ? 10 : 1}
-              fullWidth
-              sx={wrapSx}
-              placeholder={
-                settingsMode === "text"
-                  ? "Paste settings JSON here or click Export to see current settings"
-                  : "https://example.com/settings.json"
               }
-            />
+            }}
+            sx={{ mb: 2 }}
+          >
+            <Tab label="Options" />
+            <Tab label="Import/Export Settings" />
+            <Tab label="Load CSV from URL" />
+          </Tabs>
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button onClick={exportSettings} startIcon={<FileDownloadIcon />}>
-                Export Current
-              </Button>
-              <Button onClick={copyShareableLink} startIcon={<LinkIcon />}>
-                Copy Share Link
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSettingsImport}
-                disabled={!settingsJson.trim()}
-              >
-                Import Settings
-              </Button>
+          {/* Tab 0: Options */}
+          {settingsTab === 0 && (
+            <Stack spacing={3}>
+              {/* File name and column selectors */}
+              <Stack spacing={2}>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  Basic Settings
+                </Typography>
+                <TextField
+                  label="File name"
+                  size="small"
+                  value={filename}
+                  onChange={(e) => setFilename(e.target.value)}
+                  fullWidth
+                />
+                <HeaderAutocomplete
+                  label="Status column (TRUE/FALSE/INVALID/DISCUSS)"
+                  value={statusCol}
+                  options={headers}
+                  onChange={(v) => setStatusCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                <HeaderAutocomplete
+                  label="Comment column (type to create new)"
+                  value={commentCol}
+                  options={headers}
+                  onChange={(v) => setCommentCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+              </Stack>
+
+              <Divider />
+
+              {/* Column mappings */}
+              <Stack spacing={2}>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  Column Mappings
+                </Typography>
+                <HeaderAutocomplete
+                  label="Question column"
+                  value={questionCol}
+                  options={headers}
+                  onChange={(v) => setQuestionCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                <HeaderAutocomplete
+                  label="Expected answer column"
+                  value={expectedCol}
+                  options={headers}
+                  onChange={(v) => setExpectedCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                <HeaderAutocomplete
+                  label="API response column"
+                  value={apiResponseCol}
+                  options={headers}
+                  onChange={(v) => setApiResponseCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                <HeaderAutocomplete
+                  label="Evaluation score column"
+                  value={evalScoreCol}
+                  options={headers}
+                  onChange={(v) => setEvalScoreCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                <HeaderAutocomplete
+                  label="Evaluation explanation column"
+                  value={evalExplainCol}
+                  options={headers}
+                  onChange={(v) => setEvalExplainCol(v)}
+                  onEnsureCreate={(v) => ensureCol(v)}
+                />
+                {useCitations && (
+                  <HeaderAutocomplete
+                    label="Citations column"
+                    value={citationsCol}
+                    options={headers}
+                    onChange={(v) => setCitationsCol(v)}
+                    onEnsureCreate={(v) => ensureCol(v)}
+                  />
+                )}
+              </Stack>
+
+              <Divider />
+
+              {/* Toggles and filters */}
+              <Stack spacing={2}>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  sx={{ fontWeight: 600 }}
+                >
+                  View Options
+                </Typography>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useCheckedStatus}
+                      onChange={(e) => setUseCheckedStatus(e.target.checked)}
+                    />
+                  }
+                  label="Use checked column"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useCitations}
+                      onChange={(e) => setUseCitations(e.target.checked)}
+                    />
+                  }
+                  label="Enable citations"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={hideFieldTitles}
+                      onChange={(e) => setHideFieldTitles(e.target.checked)}
+                    />
+                  }
+                  label="Hide field titles"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFailedOnly}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowFailAndDiscuss(false);
+                        }
+                        setShowFailedOnly(e.target.checked);
+                        setPage(0);
+                      }}
+                    />
+                  }
+                  label="Show only FAIL"
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={showFailAndDiscuss}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setShowFailedOnly(false);
+                        }
+                        setShowFailAndDiscuss(e.target.checked);
+                        setPage(0);
+                      }}
+                    />
+                  }
+                  label="Show FAIL + DISCUSS"
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Filter by column</InputLabel>
+                  <Select
+                    value={filterByCheckedCol ? "checked" : "original"}
+                    onChange={(e) => {
+                      setFilterByCheckedCol(e.target.value === "checked");
+                      setPage(0);
+                    }}
+                    label="Filter by column"
+                    disabled={
+                      (!showFailedOnly && !showFailAndDiscuss) ||
+                      !checkedColName
+                    }
+                  >
+                    <MenuItem value="original">Original</MenuItem>
+                    <MenuItem value="checked">Checked</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
             </Stack>
-          </Stack>
-        </Paper>
-      </Snackbar>
+          )}
 
-      {/* New: CSV URL Dialog */}
-      <Snackbar
-        open={csvUrlDialogOpen}
-        onClose={() => setCsvUrlDialogOpen(false)}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
-        sx={{ maxWidth: "80vw", width: 600 }}
-      >
-        <Paper sx={{ p: 3, width: "100%" }}>
-          <Stack spacing={2}>
-            <Stack
-              direction="row"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="h6">Load CSV from URL</Typography>
-              <IconButton
-                size="small"
-                onClick={() => setCsvUrlDialogOpen(false)}
+          {/* Tab 1: Import/Export Settings */}
+          {settingsTab === 1 && (
+            <Stack spacing={2}>
+              <Tabs
+                value={settingsMode}
+                onChange={(e, v) => {
+                  setSettingsMode(v);
+                  if (v === "url") {
+                    setSettingsJson(loadedJsonUrl || "");
+                  } else {
+                    setSettingsJson(generateSettingsJson());
+                  }
+                }}
               >
-                <CloseIcon />
-              </IconButton>
-            </Stack>
+                <Tab label="Text/Paste JSON" value="text" />
+                <Tab label="Load from URL" value="url" />
+              </Tabs>
 
-            <TextField
-              label="CSV URL"
-              value={csvUrlInput}
-              onChange={(e) => setCsvUrlInput(e.target.value)}
-              fullWidth
-              placeholder="https://example.com/data.csv"
-            />
+              <TextField
+                label={settingsMode === "text" ? "Settings JSON" : "JSON URL"}
+                value={settingsJson}
+                onChange={(e) => setSettingsJson(e.target.value)}
+                multiline={settingsMode === "text"}
+                minRows={settingsMode === "text" ? 10 : 1}
+                fullWidth
+                sx={wrapSx}
+                placeholder={
+                  settingsMode === "text"
+                    ? "Paste settings JSON here or click Export to see current settings"
+                    : "https://example.com/settings.json"
+                }
+              />
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button onClick={() => setCsvUrlDialogOpen(false)}>Cancel</Button>
-              <Button
-                variant="contained"
-                onClick={() => loadCsvFromUrl(csvUrlInput)}
-                disabled={!csvUrlInput.trim()}
-              >
-                Load CSV
-              </Button>
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  onClick={exportSettings}
+                  startIcon={<FileDownloadIcon />}
+                >
+                  Export Current
+                </Button>
+                <Button onClick={copyShareableLink} startIcon={<LinkIcon />}>
+                  Copy Share Link
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleSettingsImport}
+                  disabled={!settingsJson.trim()}
+                >
+                  Import Settings
+                </Button>
+              </Stack>
             </Stack>
-          </Stack>
-        </Paper>
-      </Snackbar>
+          )}
+
+          {/* Tab 2: Load CSV from URL */}
+          {settingsTab === 2 && (
+            <Stack spacing={2}>
+              <Alert severity="info">
+                Load a CSV file directly from a URL. The file will be parsed and
+                loaded into the application.
+              </Alert>
+
+              <TextField
+                label="CSV URL"
+                value={csvUrlInput}
+                onChange={(e) => setCsvUrlInput(e.target.value)}
+                fullWidth
+                placeholder="https://example.com/data.csv"
+              />
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    loadCsvFromUrl(csvUrlInput);
+                    setSettingsDialogOpen(false);
+                  }}
+                  disabled={!csvUrlInput.trim()}
+                  startIcon={<LinkIcon />}
+                >
+                  Load CSV
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSettingsDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
