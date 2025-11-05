@@ -339,10 +339,11 @@ export default function App() {
 
   // New: use _checked column toggle (default ON)
   const [useCheckedStatus, setUseCheckedStatus] = useState(true);
-  const [showFailedOnly, setShowFailedOnly] = useState(false); // NEW
-  const [showFailAndDiscuss, setShowFailAndDiscuss] = useState(false); // NEW toggle
-  const [filterByCheckedCol, setFilterByCheckedCol] = useState(false); // NEW: filter source toggle
-  const [showOptions, setShowOptions] = useState(false); // NEW: toggle to show/hide options
+  const [showFailedOnly, setShowFailedOnly] = useState(false);
+  const [showFailAndDiscuss, setShowFailAndDiscuss] = useState(false);
+  const [filterByCheckedCol, setFilterByCheckedCol] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [hideFieldTitles, setHideFieldTitles] = useState(false); // NEW
 
   // New: Settings dialog state
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
@@ -826,6 +827,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
       showFailedOnly,
       showFailAndDiscuss,
       filterByCheckedCol,
+      hideFieldTitles, // NEW
     };
     return JSON.stringify(settings, null, 2);
   };
@@ -871,10 +873,11 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
         setShowFailAndDiscuss(settings.showFailAndDiscuss);
       if (settings.filterByCheckedCol !== undefined)
         setFilterByCheckedCol(settings.filterByCheckedCol);
+      if (settings.hideFieldTitles !== undefined)
+        setHideFieldTitles(settings.hideFieldTitles); // NEW
 
       setSnack("Settings imported successfully");
       setSettingsDialogOpen(false);
-      // Remove this line: setShowOptions(true);
     } catch (error) {
       setSnack(`Failed to import settings: ${error.message}`);
     }
@@ -1225,6 +1228,16 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                   label="Enable citations"
                   sx={{ minWidth: 150, whiteSpace: "nowrap" }}
                 />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={hideFieldTitles}
+                      onChange={(e) => setHideFieldTitles(e.target.checked)}
+                    />
+                  }
+                  label="Hide field titles"
+                  sx={{ minWidth: 150, whiteSpace: "nowrap" }}
+                />
                 {/* Show only FAIL toggle */}
                 <FormControlLabel
                   control={
@@ -1232,7 +1245,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       checked={showFailedOnly}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setShowFailAndDiscuss(false); // Disable the other filter
+                          setShowFailAndDiscuss(false);
                         }
                         setShowFailedOnly(e.target.checked);
                         setPage(0);
@@ -1416,24 +1429,36 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 <Stack spacing={1.5}>
                   {questionCol && (
                     <FieldBlock
-                      title={`Question (${questionCol})`}
-                      color="#e3f2fd" // light blue
+                      title={
+                        hideFieldTitles
+                          ? questionCol
+                          : `Question (${questionCol})`
+                      }
+                      color="#e3f2fd"
                       value={currentRow[questionCol]}
                       onChange={(v) => setCell(currentIdx, questionCol, v)}
                     />
                   )}
                   {expectedCol && (
                     <FieldBlock
-                      title={`Expected Answer (${expectedCol})`}
-                      color="#e8f5e9" // light green
+                      title={
+                        hideFieldTitles
+                          ? expectedCol
+                          : `Expected Answer (${expectedCol})`
+                      }
+                      color="#e8f5e9"
                       value={currentRow[expectedCol]}
                       onChange={(v) => setCell(currentIdx, expectedCol, v)}
                     />
                   )}
                   {apiResponseCol && (
                     <FieldBlock
-                      title={`API Response (${apiResponseCol})`}
-                      color="#ffebee" // light red
+                      title={
+                        hideFieldTitles
+                          ? apiResponseCol
+                          : `API Response (${apiResponseCol})`
+                      }
+                      color="#ffebee"
                       value={currentRow[apiResponseCol]}
                       onChange={(v) => setCell(currentIdx, apiResponseCol, v)}
                     />
@@ -1441,16 +1466,24 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
                     {evalScoreCol && (
                       <FieldBlock
-                        title={`Evaluation Score (${evalScoreCol})`}
-                        color="#f5f5f5" // light grey
+                        title={
+                          hideFieldTitles
+                            ? evalScoreCol
+                            : `Evaluation Score (${evalScoreCol})`
+                        }
+                        color="#f5f5f5"
                         value={currentRow[evalScoreCol]}
                         onChange={(v) => setCell(currentIdx, evalScoreCol, v)}
                       />
                     )}
                     {evalExplainCol && (
                       <FieldBlock
-                        title={`Evaluation Explanation (${evalExplainCol})`}
-                        color="#f5f5f5" // light grey
+                        title={
+                          hideFieldTitles
+                            ? evalExplainCol
+                            : `Evaluation Explanation (${evalExplainCol})`
+                        }
+                        color="#f5f5f5"
                         value={currentRow[evalExplainCol]}
                         onChange={(v) => setCell(currentIdx, evalExplainCol, v)}
                       />
@@ -1465,7 +1498,10 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                         color="text.secondary"
                         sx={{ fontWeight: 600, mb: 1, display: "block" }}
                       >
-                        Citations ({citationsCol}) - Read Only
+                        {hideFieldTitles
+                          ? citationsCol
+                          : `Citations (${citationsCol})`}{" "}
+                        - Read Only
                       </Typography>
                       <Box
                         component="pre"
