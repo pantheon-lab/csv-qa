@@ -56,6 +56,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy"; // ADD THIS LINE
 import LinkIcon from "@mui/icons-material/Link";
 import TuneIcon from "@mui/icons-material/Tune";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
+import TranslateIcon from "@mui/icons-material/Translate";
 import Papa from "papaparse";
 import { Octokit } from "@octokit/rest";
 
@@ -209,7 +210,18 @@ const wrapSx = {
   "& textarea": { whiteSpace: "pre-wrap", wordBreak: "break-word" },
 };
 
-function FieldBlock({ title, color, value, onChange, multiline = true }) {
+function FieldBlock({
+  title,
+  color,
+  value,
+  onChange,
+  multiline = true,
+  rowIdx,
+  fieldName,
+  onTranslate,
+  translation,
+  isTranslating,
+}) {
   const [copyFeedback, setCopyFeedback] = React.useState(false);
 
   const handleCopy = () => {
@@ -234,23 +246,52 @@ function FieldBlock({ title, color, value, onChange, multiline = true }) {
         >
           {title}
         </Typography>
-        <Tooltip title={copyFeedback ? "Copied!" : "Copy to clipboard"}>
-          <IconButton
-            size="small"
-            onClick={handleCopy}
-            sx={{
-              opacity: copyFeedback ? 1 : 0.6,
-              color: copyFeedback ? "success.main" : "inherit",
-              "&:hover": { opacity: 1 },
-            }}
-          >
-            {copyFeedback ? (
-              <CheckIcon fontSize="small" />
-            ) : (
-              <ContentCopyIcon fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={0.5}>
+          {/* NEW: Translate button */}
+          {onTranslate && (
+            <Tooltip
+              title={
+                translation
+                  ? "Hide translation"
+                  : "Translate to Traditional Chinese"
+              }
+            >
+              <IconButton
+                size="small"
+                onClick={() => onTranslate(value, rowIdx, fieldName)}
+                disabled={isTranslating}
+                sx={{
+                  opacity: translation ? 1 : 0.6,
+                  color: translation ? "primary.main" : "inherit",
+                  "&:hover": { opacity: 1 },
+                }}
+              >
+                {isTranslating ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <TranslateIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          )}
+          <Tooltip title={copyFeedback ? "Copied!" : "Copy to clipboard"}>
+            <IconButton
+              size="small"
+              onClick={handleCopy}
+              sx={{
+                opacity: copyFeedback ? 1 : 0.6,
+                color: copyFeedback ? "success.main" : "inherit",
+                "&:hover": { opacity: 1 },
+              }}
+            >
+              {copyFeedback ? (
+                <CheckIcon fontSize="small" />
+              ) : (
+                <ContentCopyIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Stack>
       <TextField
         value={value ?? ""}
@@ -261,6 +302,55 @@ function FieldBlock({ title, color, value, onChange, multiline = true }) {
         minRows={3}
         sx={wrapSx}
       />
+      {/* NEW: Translation display */}
+      {translation && (
+        <Box
+          sx={{
+            mt: 1,
+            p: 1.5,
+            borderRadius: 1,
+            bgcolor: "rgba(25, 118, 210, 0.08)",
+            border: "1px solid rgba(25, 118, 210, 0.2)",
+          }}
+        >
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+            sx={{ mb: 0.5 }}
+          >
+            <Typography
+              variant="caption"
+              color="primary"
+              sx={{ fontWeight: 600 }}
+            >
+              繁體中文翻譯
+            </Typography>
+            <Tooltip title="Copy translation">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  navigator.clipboard.writeText(translation);
+                  setSnack("Translation copied!");
+                }}
+                sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+              >
+                <ContentCopyIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+          <Typography
+            variant="body2"
+            sx={{
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              color: "text.primary",
+            }}
+          >
+            {translation}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -405,6 +495,7 @@ export default function App() {
   const [uploading, setUploading] = useState(false);
   const [uploadedGistUrl, setUploadedGistUrl] = useState("");
   const [showGistDialog, setShowGistDialog] = useState(false);
+  const [includeTokenInLink, setIncludeTokenInLink] = useState(false); // NEW: Default false
 
   // Moved UP so it exists before any helper referencing it
   const checkedColName = useMemo(
@@ -420,6 +511,13 @@ export default function App() {
   const [testMsg, setTestMsg] = useState("");
 
   const [dlAnchor, setDlAnchor] = useState(null);
+
+  // NEW: Google Translate integration
+  const [googleApiKey, setGoogleApiKey] = useState(
+    localStorage.getItem("google_translate_key") || ""
+  );
+  const [translations, setTranslations] = useState({}); // { "rowIdx-fieldName": "translated text" }
+  const [translating, setTranslating] = useState({}); // { "rowIdx-fieldName": true/false }
 
   const inputRef = useRef(null);
 
@@ -990,6 +1088,80 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     }
   };
 
+  // NEW: Save Google API key
+  const saveGoogleApiKey = (key) => {
+    setGoogleApiKey(key);
+    localStorage.setItem("google_translate_key", key);
+  };
+
+  // NEW: Translate text to Traditional Chinese
+  const translateText = async (text, rowIdx, fieldName) => {
+    if (!googleApiKey) {
+      setSnack("Please set your Google API key in settings");
+      setSettingsDialogOpen(true);
+      setSettingsTab(4); // Google Translate tab
+      return;
+    }
+
+    if (!text || text.trim() === "") {
+      setSnack("No text to translate");
+      return;
+    }
+
+    const translationKey = `${rowIdx}-${fieldName}`;
+
+    // Toggle off if already showing translation
+    if (translations[translationKey]) {
+      setTranslations((prev) => {
+        const next = { ...prev };
+        delete next[translationKey];
+        return next;
+      });
+      return;
+    }
+
+    setTranslating((prev) => ({ ...prev, [translationKey]: true }));
+
+    try {
+      const response = await fetch(
+        `https://translation.googleapis.com/language/translate/v2?key=${googleApiKey}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            q: text,
+            target: "zh-TW", // Traditional Chinese
+            format: "text",
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const translatedText = data.data?.translations?.[0]?.translatedText || "";
+
+      setTranslations((prev) => ({
+        ...prev,
+        [translationKey]: translatedText,
+      }));
+    } catch (error) {
+      console.error("Translation failed:", error);
+      setSnack(`Translation failed: ${error.message}`);
+    } finally {
+      setTranslating((prev) => {
+        const next = { ...prev };
+        delete next[translationKey];
+        return next;
+      });
+    }
+  };
+
   // New: Parse URL parameters on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1040,8 +1212,8 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     if (loadedCsvUrl) {
       params.append("csv", loadedCsvUrl);
     }
-    // NEW: Include token in shareable link
-    if (githubToken) {
+    // UPDATED: Only include token if toggle is ON
+    if (includeTokenInLink && githubToken) {
       params.append("token", githubToken);
     }
 
@@ -1050,7 +1222,11 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
       : baseUrl;
 
     navigator.clipboard.writeText(shareUrl).then(() => {
-      setSnack("Shareable link copied to clipboard (includes token)");
+      const message =
+        includeTokenInLink && githubToken
+          ? "Shareable link copied to clipboard (includes token)"
+          : "Shareable link copied to clipboard";
+      setSnack(message);
     });
   };
 
@@ -1102,9 +1278,11 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
       // Generate shareable link
       const shareableLink = `${window.location.origin}${
         window.location.pathname
-      }?json=${encodeURIComponent(jsonUrl)}&csv=${encodeURIComponent(
-        csvUrl
-      )}&token=${encodeURIComponent(githubToken)}`;
+      }?json=${encodeURIComponent(jsonUrl)}&csv=${encodeURIComponent(csvUrl)}${
+        includeTokenInLink && githubToken
+          ? `&token=${encodeURIComponent(githubToken)}`
+          : ""
+      }`;
 
       setLoadedJsonUrl(jsonUrl);
       setLoadedCsvUrl(csvUrl);
@@ -1336,45 +1514,105 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               </Box>
             ) : (
               <Stack spacing={2}>
-                {/* Status + Comment */}
-                {statusCol && (
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    {useCheckedStatus && checkedColName ? (
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        flexWrap="wrap"
-                      >
+                {/* Status + Comment with Translate All button */}
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  alignItems="flex-start"
+                  flexWrap="wrap"
+                  justifyContent="space-between" // ADD THIS
+                >
+                  {statusCol && (
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      {useCheckedStatus && checkedColName ? (
                         <Stack
                           direction="row"
-                          spacing={0.5}
+                          spacing={1}
                           alignItems="center"
+                          flexWrap="wrap"
                         >
-                          <Typography variant="caption" color="text.secondary">
-                            Checked
-                          </Typography>
-                          <StatusChip value={currentChecked} />
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            alignItems="center"
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Checked
+                            </Typography>
+                            <StatusChip value={currentChecked} />
+                          </Stack>
+                          <Stack
+                            direction="row"
+                            spacing={0.5}
+                            alignItems="center"
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              Original
+                            </Typography>
+                            <Box sx={{ opacity: 0.3 }}>
+                              <StatusChip value={currentStatus} />
+                            </Box>
+                          </Stack>
                         </Stack>
-                        <Stack
-                          direction="row"
-                          spacing={0.5}
-                          alignItems="center"
-                        >
-                          <Typography variant="caption" color="text.secondary">
-                            Original
-                          </Typography>
-                          <Box sx={{ opacity: 0.3 }}>
-                            <StatusChip value={currentStatus} />
-                          </Box>
-                        </Stack>
-                      </Stack>
-                    ) : (
-                      <StatusChip value={effectiveStatus} />
-                    )}
-                  </Stack>
-                )}
+                      ) : (
+                        <StatusChip value={effectiveStatus} />
+                      )}
+                    </Stack>
+                  )}
 
+                  {/* NEW: Translate All button */}
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    startIcon={
+                      Object.values(translating).some((v) => v) ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : (
+                        <TranslateIcon />
+                      )
+                    }
+                    onClick={async () => {
+                      const fieldsToTranslate = [
+                        { col: questionCol, name: "question" },
+                        { col: expectedCol, name: "expected" },
+                        { col: apiResponseCol, name: "apiResponse" },
+                        { col: evalExplainCol, name: "evalExplain" },
+                      ].filter((f) => f.col && currentRow[f.col]);
+
+                      for (const field of fieldsToTranslate) {
+                        const text = currentRow[field.col];
+                        if (text && text.trim()) {
+                          await translateText(text, currentIdx, field.col);
+                        }
+                      }
+                    }}
+                    disabled={
+                      !googleApiKey ||
+                      Object.values(translating).some((v) => v) ||
+                      ![
+                        questionCol,
+                        expectedCol,
+                        apiResponseCol,
+                        evalExplainCol,
+                      ].some(
+                        (col) =>
+                          col && currentRow[col] && currentRow[col].trim()
+                      )
+                    }
+                    size="small"
+                    sx={{ ml: "auto" }} // ADD THIS to push button to the right
+                  >
+                    Translate All
+                  </Button>
+                </Stack>
+
+                {/* ...existing comment field code... */}
                 {commentCol && (
                   <Box>
                     <Stack
@@ -1422,6 +1660,13 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       color="#e3f2fd"
                       value={currentRow[questionCol]}
                       onChange={(v) => setCell(currentIdx, questionCol, v)}
+                      rowIdx={currentIdx}
+                      fieldName={questionCol}
+                      onTranslate={translateText}
+                      translation={translations[`${currentIdx}-${questionCol}`]}
+                      isTranslating={
+                        translating[`${currentIdx}-${questionCol}`]
+                      }
                     />
                   )}
                   {expectedCol && (
@@ -1434,6 +1679,13 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       color="#e8f5e9"
                       value={currentRow[expectedCol]}
                       onChange={(v) => setCell(currentIdx, expectedCol, v)}
+                      rowIdx={currentIdx}
+                      fieldName={expectedCol}
+                      onTranslate={translateText}
+                      translation={translations[`${currentIdx}-${expectedCol}`]}
+                      isTranslating={
+                        translating[`${currentIdx}-${expectedCol}`]
+                      }
                     />
                   )}
                   {apiResponseCol && (
@@ -1446,6 +1698,15 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                       color="#ffebee"
                       value={currentRow[apiResponseCol]}
                       onChange={(v) => setCell(currentIdx, apiResponseCol, v)}
+                      rowIdx={currentIdx}
+                      fieldName={apiResponseCol}
+                      onTranslate={translateText}
+                      translation={
+                        translations[`${currentIdx}-${apiResponseCol}`]
+                      }
+                      isTranslating={
+                        translating[`${currentIdx}-${apiResponseCol}`]
+                      }
                     />
                   )}
                   {/* Evaluation Score and Explanation in same row */}
@@ -1465,6 +1726,15 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                               setCell(currentIdx, evalScoreCol, v)
                             }
                             multiline={false}
+                            rowIdx={currentIdx}
+                            fieldName={evalScoreCol}
+                            onTranslate={translateText}
+                            translation={
+                              translations[`${currentIdx}-${evalScoreCol}`]
+                            }
+                            isTranslating={
+                              translating[`${currentIdx}-${evalScoreCol}`]
+                            }
                           />
                         </Box>
                       )}
@@ -1480,6 +1750,15 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                             value={currentRow[evalExplainCol]}
                             onChange={(v) =>
                               setCell(currentIdx, evalExplainCol, v)
+                            }
+                            rowIdx={currentIdx}
+                            fieldName={evalExplainCol}
+                            onTranslate={translateText}
+                            translation={
+                              translations[`${currentIdx}-${evalExplainCol}`]
+                            }
+                            isTranslating={
+                              translating[`${currentIdx}-${evalExplainCol}`]
                             }
                           />
                         </Box>
@@ -1572,20 +1851,59 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                             >
                               {h}
                             </Typography>
-                            <Tooltip title="Copy to clipboard">
-                              <IconButton
-                                size="small"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(
-                                    currentRow[h] || ""
-                                  );
-                                  setSnack(`${h} copied!`);
-                                }}
-                                sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+                            <Stack direction="row" spacing={0.5}>
+                              {/* NEW: Translate button for other columns */}
+                              <Tooltip
+                                title={
+                                  translations[`${currentIdx}-${h}`]
+                                    ? "Hide translation"
+                                    : "Translate to Traditional Chinese"
+                                }
                               >
-                                <ContentCopyIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+                                <IconButton
+                                  size="small"
+                                  onClick={() =>
+                                    translateText(currentRow[h], currentIdx, h)
+                                  }
+                                  disabled={
+                                    translating[`${currentIdx}-${h}`] ||
+                                    !currentRow[h]?.trim()
+                                  }
+                                  sx={{
+                                    opacity: translations[`${currentIdx}-${h}`]
+                                      ? 1
+                                      : 0.6,
+                                    color: translations[`${currentIdx}-${h}`]
+                                      ? "primary.main"
+                                      : "inherit",
+                                    "&:hover": { opacity: 1 },
+                                  }}
+                                >
+                                  {translating[`${currentIdx}-${h}`] ? (
+                                    <CircularProgress size={16} />
+                                  ) : (
+                                    <TranslateIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Copy to clipboard">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(
+                                      currentRow[h] || ""
+                                    );
+                                    setSnack(`${h} copied!`);
+                                  }}
+                                  sx={{
+                                    opacity: 0.6,
+                                    "&:hover": { opacity: 1 },
+                                  }}
+                                >
+                                  <ContentCopyIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
                           </Stack>
                           <TextField
                             value={currentRow[h] ?? ""}
@@ -1598,6 +1916,60 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                             minRows={2}
                             sx={wrapSx}
                           />
+                          {/* NEW: Translation display for other columns */}
+                          {translations[`${currentIdx}-${h}`] && (
+                            <Box
+                              sx={{
+                                mt: 1,
+                                p: 1.5,
+                                borderRadius: 1,
+                                bgcolor: "rgba(25, 118, 210, 0.08)",
+                                border: "1px solid rgba(25, 118, 210, 0.2)",
+                              }}
+                            >
+                              <Stack
+                                direction="row"
+                                justifyContent="space-between"
+                                alignItems="center"
+                                sx={{ mb: 0.5 }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  color="primary"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  繁體中文翻譯
+                                </Typography>
+                                <Tooltip title="Copy translation">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(
+                                        translations[`${currentIdx}-${h}`]
+                                      );
+                                      setSnack("Translation copied!");
+                                    }}
+                                    sx={{
+                                      opacity: 0.6,
+                                      "&:hover": { opacity: 1 },
+                                    }}
+                                  >
+                                    <ContentCopyIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  color: "text.primary",
+                                }}
+                              >
+                                {translations[`${currentIdx}-${h}`]}
+                              </Typography>
+                            </Box>
+                          )}
                         </Box>
                       ))}
                     </Stack>
@@ -1955,6 +2327,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             <Tab label="Import/Export Settings" />
             <Tab label="Load CSV from URL" />
             <Tab label="GitHub Integration" /> {/* NEW TAB */}
+            <Tab label="Google Translate" /> {/* NEW TAB */}
           </Tabs>
 
           {/* Tab 0: Options */}
@@ -2273,6 +2646,17 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 }
               />
 
+              {/* NEW: Toggle for including token in shareable links */}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={includeTokenInLink}
+                    onChange={(e) => setIncludeTokenInLink(e.target.checked)}
+                  />
+                }
+                label="Include token in shareable links"
+              />
+
               {githubToken && (
                 <Alert severity="success">
                   Token configured! You can now use the "Share to Cloud" button.
@@ -2289,6 +2673,67 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                   disabled={!githubToken}
                 >
                   Clear Token
+                </Button>
+              </Stack>
+            </Stack>
+          )}
+
+          {/* Tab 4: Google Translate */}
+          {settingsTab === 4 && (
+            <Stack spacing={2}>
+              <Alert severity="info">
+                To use Google Translate, you need a Google Cloud API key.
+                <br />
+                <strong>Steps:</strong>
+                <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                  <li>Go to Google Cloud Console</li>
+                  <li>Enable "Cloud Translation API"</li>
+                  <li>Create an API key with Translation API access</li>
+                  <li>Copy and paste the key below</li>
+                </ol>
+                <strong>Free Quota:</strong> 500,000 characters/month (FREE)
+                <br />
+                <a
+                  href="https://console.cloud.google.com/apis/credentials"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#1976d2" }}
+                >
+                  → Open Google Cloud Credentials
+                </a>
+              </Alert>
+
+              <TextField
+                label="Google Cloud API Key"
+                type="password"
+                value={googleApiKey}
+                onChange={(e) => saveGoogleApiKey(e.target.value)}
+                fullWidth
+                placeholder="AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                helperText={
+                  googleApiKey
+                    ? "API key saved (stored in browser)"
+                    : "Enter your API key to enable translations"
+                }
+              />
+
+              {googleApiKey && (
+                <Alert severity="success">
+                  API key configured! You can now translate text to Traditional
+                  Chinese by clicking the translate icon next to any field.
+                </Alert>
+              )}
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  color="error"
+                  onClick={() => {
+                    saveGoogleApiKey("");
+                    setSnack("Google API key cleared");
+                  }}
+                  disabled={!googleApiKey}
+                >
+                  Clear Key
                 </Button>
               </Stack>
             </Stack>
