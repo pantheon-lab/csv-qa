@@ -210,151 +210,6 @@ const wrapSx = {
   "& textarea": { whiteSpace: "pre-wrap", wordBreak: "break-word" },
 };
 
-function FieldBlock({
-  title,
-  color,
-  value,
-  onChange,
-  multiline = true,
-  rowIdx,
-  fieldName,
-  onTranslate,
-  translation,
-  isTranslating,
-}) {
-  const [copyFeedback, setCopyFeedback] = React.useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(value || "").then(() => {
-      setCopyFeedback(true);
-      setTimeout(() => setCopyFeedback(false), 1500);
-    });
-  };
-
-  return (
-    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: color }}>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 0.5 }}
-      >
-        <Typography
-          variant="caption"
-          color="text.secondary"
-          sx={{ fontWeight: 600 }}
-        >
-          {title}
-        </Typography>
-        <Stack direction="row" spacing={0.5}>
-          {/* NEW: Translate button */}
-          {onTranslate && (
-            <Tooltip
-              title={
-                translation
-                  ? "Hide translation"
-                  : "Translate to Traditional Chinese"
-              }
-            >
-              <IconButton
-                size="small"
-                onClick={() => onTranslate(value, rowIdx, fieldName)}
-                disabled={isTranslating}
-                sx={{
-                  opacity: translation ? 1 : 0.6,
-                  color: translation ? "primary.main" : "inherit",
-                  "&:hover": { opacity: 1 },
-                }}
-              >
-                {isTranslating ? (
-                  <CircularProgress size={16} />
-                ) : (
-                  <TranslateIcon fontSize="small" />
-                )}
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title={copyFeedback ? "Copied!" : "Copy to clipboard"}>
-            <IconButton
-              size="small"
-              onClick={handleCopy}
-              sx={{
-                opacity: copyFeedback ? 1 : 0.6,
-                color: copyFeedback ? "success.main" : "inherit",
-                "&:hover": { opacity: 1 },
-              }}
-            >
-              {copyFeedback ? (
-                <CheckIcon fontSize="small" />
-              ) : (
-                <ContentCopyIcon fontSize="small" />
-              )}
-            </IconButton>
-          </Tooltip>
-        </Stack>
-      </Stack>
-      <TextField
-        value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value)}
-        fullWidth
-        size="small"
-        multiline={multiline}
-        minRows={3}
-        sx={wrapSx}
-      />
-      {/* NEW: Translation display */}
-      {translation && (
-        <Box
-          sx={{
-            mt: 1,
-            p: 1.5,
-            borderRadius: 1,
-            bgcolor: "rgba(25, 118, 210, 0.08)",
-            border: "1px solid rgba(25, 118, 210, 0.2)",
-          }}
-        >
-          <Stack
-            direction="row"
-            justifyContent="space-between"
-            alignItems="center"
-            sx={{ mb: 0.5 }}
-          >
-            <Typography
-              variant="caption"
-              color="primary"
-              sx={{ fontWeight: 600 }}
-            >
-              繁體中文翻譯
-            </Typography>
-            <Tooltip title="Copy translation">
-              <IconButton
-                size="small"
-                onClick={() => {
-                  navigator.clipboard.writeText(translation);
-                  setSnack("Translation copied!");
-                }}
-                sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
-              >
-                <ContentCopyIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-          <Typography
-            variant="body2"
-            sx={{
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              color: "text.primary",
-            }}
-          >
-            {translation}
-          </Typography>
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 // --- helpers for projections/downloads ---
 function projectChecked(checkedVal, originalVal, fillMissing) {
   const c = (checkedVal ?? "").trim();
@@ -507,7 +362,6 @@ export default function App() {
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [tab, setTab] = useState(0); // 0=Table, 1=Row QA
-  const [snack, setSnack] = useState("");
   const [testMsg, setTestMsg] = useState("");
 
   const [dlAnchor, setDlAnchor] = useState(null);
@@ -519,9 +373,157 @@ export default function App() {
   const [translations, setTranslations] = useState({}); // { "rowIdx-fieldName": "translated text" }
   const [translating, setTranslating] = useState({}); // { "rowIdx-fieldName": true/false }
 
+  const [snack, setSnack] = useState("");
+
   const inputRef = useRef(null);
 
   const hasData = rows.length > 0;
+
+  function FieldBlock({
+    title,
+    color,
+    value,
+    onChange,
+    multiline = true,
+    rowIdx,
+    fieldName,
+    onTranslate,
+    translation,
+    isTranslating,
+  }) {
+    const [copyFeedback, setCopyFeedback] = React.useState(false);
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(value || "").then(() => {
+        setCopyFeedback(true);
+        setTimeout(() => setCopyFeedback(false), 1500);
+      });
+    };
+
+    return (
+      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: color }}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+          sx={{ mb: 0.5 }}
+        >
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontWeight: 600 }}
+          >
+            {title}
+          </Typography>
+          <Stack direction="row" spacing={0.5}>
+            {/* NEW: Translate button */}
+            {onTranslate && (
+              // <Tooltip
+              //   title={
+              //     translation
+              //       ? "Hide translation"
+              //       : "Translate to Traditional Chinese"
+              //   }
+              // >
+              <IconButton
+                size="small"
+                onClick={() => onTranslate(value, rowIdx, fieldName)}
+                disabled={isTranslating}
+                sx={{
+                  opacity: translation ? 1 : 0.6,
+                  color: translation ? "primary.main" : "inherit",
+                  "&:hover": { opacity: 1 },
+                }}
+              >
+                {isTranslating ? (
+                  <CircularProgress size={16} />
+                ) : (
+                  <TranslateIcon fontSize="small" />
+                )}
+              </IconButton>
+              // </Tooltip>
+            )}
+            <Tooltip title={copyFeedback ? "Copied!" : "Copy to clipboard"}>
+              <IconButton
+                size="small"
+                onClick={handleCopy}
+                sx={{
+                  opacity: copyFeedback ? 1 : 0.6,
+                  color: copyFeedback ? "success.main" : "inherit",
+                  "&:hover": { opacity: 1 },
+                }}
+              >
+                {copyFeedback ? (
+                  <CheckIcon fontSize="small" />
+                ) : (
+                  <ContentCopyIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+        <TextField
+          value={value ?? ""}
+          onChange={(e) => onChange?.(e.target.value)}
+          fullWidth
+          size="small"
+          multiline={multiline}
+          minRows={3}
+          sx={wrapSx}
+        />
+        {/* NEW: Translation display */}
+        {translation && (
+          <Box
+            sx={{
+              mt: 1,
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: "rgba(25, 118, 210, 0.08)",
+              border: "1px solid rgba(25, 118, 210, 0.2)",
+            }}
+          >
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 0.5 }}
+            >
+              <Typography
+                variant="caption"
+                color="primary"
+                sx={{ fontWeight: 600 }}
+              >
+                繁體中文翻譯
+              </Typography>
+              <Tooltip title="Copy translation">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(translation);
+                    setSnack("Translation copied!");
+                  }}
+                  sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+            <Typography
+              variant="body2"
+              sx={{
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                color: "text.primary",
+              }}
+            >
+              {translation}
+            </Typography>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
   // Updated helpers for fail filtering - always use original status column for filtering
   const getEffectiveStatus = (row) => {
     if (!row || !statusCol) return "";
@@ -1853,39 +1855,39 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                             </Typography>
                             <Stack direction="row" spacing={0.5}>
                               {/* NEW: Translate button for other columns */}
-                              <Tooltip
+                              {/* <Tooltip
                                 title={
                                   translations[`${currentIdx}-${h}`]
                                     ? "Hide translation"
                                     : "Translate to Traditional Chinese"
                                 }
+                              > */}
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  translateText(currentRow[h], currentIdx, h)
+                                }
+                                disabled={
+                                  translating[`${currentIdx}-${h}`] ||
+                                  !currentRow[h]?.trim()
+                                }
+                                sx={{
+                                  opacity: translations[`${currentIdx}-${h}`]
+                                    ? 1
+                                    : 0.6,
+                                  color: translations[`${currentIdx}-${h}`]
+                                    ? "primary.main"
+                                    : "inherit",
+                                  "&:hover": { opacity: 1 },
+                                }}
                               >
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    translateText(currentRow[h], currentIdx, h)
-                                  }
-                                  disabled={
-                                    translating[`${currentIdx}-${h}`] ||
-                                    !currentRow[h]?.trim()
-                                  }
-                                  sx={{
-                                    opacity: translations[`${currentIdx}-${h}`]
-                                      ? 1
-                                      : 0.6,
-                                    color: translations[`${currentIdx}-${h}`]
-                                      ? "primary.main"
-                                      : "inherit",
-                                    "&:hover": { opacity: 1 },
-                                  }}
-                                >
-                                  {translating[`${currentIdx}-${h}`] ? (
-                                    <CircularProgress size={16} />
-                                  ) : (
-                                    <TranslateIcon fontSize="small" />
-                                  )}
-                                </IconButton>
-                              </Tooltip>
+                                {translating[`${currentIdx}-${h}`] ? (
+                                  <CircularProgress size={16} />
+                                ) : (
+                                  <TranslateIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                              {/* </Tooltip> */}
                               <Tooltip title="Copy to clipboard">
                                 <IconButton
                                   size="small"
