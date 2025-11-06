@@ -52,6 +52,7 @@ import ForumIcon from "@mui/icons-material/Forum";
 import ContentPasteSearchIcon from "@mui/icons-material/ContentPasteSearch";
 import ClearIcon from "@mui/icons-material/Clear";
 import SettingsIcon from "@mui/icons-material/Settings";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy"; // ADD THIS LINE
 import LinkIcon from "@mui/icons-material/Link";
 import TuneIcon from "@mui/icons-material/Tune";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
@@ -209,15 +210,48 @@ const wrapSx = {
 };
 
 function FieldBlock({ title, color, value, onChange, multiline = true }) {
+  const [copyFeedback, setCopyFeedback] = React.useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value || "").then(() => {
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 1500);
+    });
+  };
+
   return (
     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: color }}>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontWeight: 600 }}
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mb: 0.5 }}
       >
-        {title}
-      </Typography>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ fontWeight: 600 }}
+        >
+          {title}
+        </Typography>
+        <Tooltip title={copyFeedback ? "Copied!" : "Copy to clipboard"}>
+          <IconButton
+            size="small"
+            onClick={handleCopy}
+            sx={{
+              opacity: copyFeedback ? 1 : 0.6,
+              color: copyFeedback ? "success.main" : "inherit",
+              "&:hover": { opacity: 1 },
+            }}
+          >
+            {copyFeedback ? (
+              <CheckIcon fontSize="small" />
+            ) : (
+              <ContentCopyIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+      </Stack>
       <TextField
         value={value ?? ""}
         onChange={(e) => onChange?.(e.target.value)}
@@ -1342,15 +1376,38 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                 )}
 
                 {commentCol && (
-                  <TextField
-                    label={`Comment (${commentCol})`}
-                    value={currentComment}
-                    onChange={(e) => setCommentForCurrent(e.target.value)}
-                    multiline
-                    minRows={3}
-                    fullWidth
-                    sx={wrapSx}
-                  />
+                  <Box>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{ mb: 0.5 }}
+                    >
+                      <Typography variant="body2" fontWeight={600}>
+                        Comment ({commentCol})
+                      </Typography>
+                      <Tooltip title="Copy to clipboard">
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            navigator.clipboard.writeText(currentComment);
+                            setSnack("Comment copied!");
+                          }}
+                          sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+                        >
+                          <ContentCopyIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                    <TextField
+                      value={currentComment}
+                      onChange={(e) => setCommentForCurrent(e.target.value)}
+                      multiline
+                      minRows={3}
+                      fullWidth
+                      sx={wrapSx}
+                    />
+                  </Box>
                 )}
 
                 {/* Primary fields with colors */}
@@ -1433,16 +1490,37 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                   {/* Citations JSON display - read-only */}
                   {useCitations && citationsCol && currentRow[citationsCol] && (
                     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f8f9fa" }}>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontWeight: 600, mb: 1, display: "block" }}
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        sx={{ mb: 1 }}
                       >
-                        {hideFieldTitles
-                          ? citationsCol
-                          : `Citations (${citationsCol})`}{" "}
-                        - Read Only
-                      </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontWeight: 600 }}
+                        >
+                          {hideFieldTitles
+                            ? citationsCol
+                            : `Citations (${citationsCol})`}{" "}
+                          - Read Only
+                        </Typography>
+                        <Tooltip title="Copy to clipboard">
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                currentRow[citationsCol] || ""
+                              );
+                              setSnack("Citations copied!");
+                            }}
+                            sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+                          >
+                            <ContentCopyIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
                       <Box
                         component="pre"
                         sx={{
@@ -1457,11 +1535,6 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                           margin: 0,
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
-                          "& .json-key": { color: "#81c7d4" },
-                          "& .json-string": { color: "#a8e6cf" },
-                          "& .json-number": { color: "#ffd3a5" },
-                          "& .json-boolean": { color: "#ffaaa5" },
-                          "& .json-null": { color: "#ff8b94" },
                         }}
                       >
                         {(() => {
@@ -1487,9 +1560,33 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
                     <Stack spacing={1.2}>
                       {otherHeaders.map((h) => (
                         <Box key={h}>
-                          <Typography variant="caption" color="text.secondary">
-                            {h}
-                          </Typography>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            sx={{ mb: 0.5 }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {h}
+                            </Typography>
+                            <Tooltip title="Copy to clipboard">
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(
+                                    currentRow[h] || ""
+                                  );
+                                  setSnack(`${h} copied!`);
+                                }}
+                                sx={{ opacity: 0.6, "&:hover": { opacity: 1 } }}
+                              >
+                                <ContentCopyIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
                           <TextField
                             value={currentRow[h] ?? ""}
                             onChange={(e) =>
