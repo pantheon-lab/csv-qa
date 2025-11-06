@@ -38,6 +38,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  CircularProgress,
 } from "@mui/material";
 // FIX: incorrect import path for UploadFileIcon
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -53,7 +54,9 @@ import ClearIcon from "@mui/icons-material/Clear";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LinkIcon from "@mui/icons-material/Link";
 import TuneIcon from "@mui/icons-material/Tune";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import Papa from "papaparse";
+import { Octokit } from "@octokit/rest";
 
 /**
  * CSV QA Minimal — client‑side React tool
@@ -360,6 +363,14 @@ export default function App() {
   // New: Track URLs loaded from parameters
   const [loadedJsonUrl, setLoadedJsonUrl] = useState("");
   const [loadedCsvUrl, setLoadedCsvUrl] = useState("");
+
+  // NEW: GitHub Gist upload states
+  const [githubToken, setGithubToken] = useState(
+    localStorage.getItem("github_token") || ""
+  );
+  const [uploading, setUploading] = useState(false);
+  const [uploadedGistUrl, setUploadedGistUrl] = useState("");
+  const [showGistDialog, setShowGistDialog] = useState(false);
 
   // Moved UP so it exists before any helper referencing it
   const checkedColName = useMemo(
@@ -950,6 +961,13 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     const params = new URLSearchParams(window.location.search);
     const jsonUrl = params.get("json");
     const csvUrl = params.get("csv");
+    const token = params.get("token"); // NEW: Get token from URL
+
+    // NEW: Set token from URL if provided
+    if (token) {
+      saveGitHubToken(token);
+      setSnack("GitHub token loaded from URL");
+    }
 
     const loadFromUrls = async () => {
       try {
@@ -988,14 +1006,91 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
     if (loadedCsvUrl) {
       params.append("csv", loadedCsvUrl);
     }
+    // NEW: Include token in shareable link
+    if (githubToken) {
+      params.append("token", githubToken);
+    }
 
     const shareUrl = params.toString()
       ? `${baseUrl}?${params.toString()}`
       : baseUrl;
 
     navigator.clipboard.writeText(shareUrl).then(() => {
-      setSnack("Shareable link copied to clipboard");
+      setSnack("Shareable link copied to clipboard (includes token)");
     });
+  };
+
+  // NEW: Upload to GitHub Gist
+  const uploadToGitHub = async () => {
+    if (!hasData || !statusCol) {
+      setSnack("Please load data and configure columns first");
+      return;
+    }
+
+    if (!githubToken) {
+      setSnack("Please set your GitHub token in settings");
+      setSettingsDialogOpen(true);
+      setSettingsTab(3); // GitHub tab
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const octokit = new Octokit({ auth: githubToken });
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const csv = toCsv(rows);
+      const settingsJson = generateSettingsJson();
+
+      // Create a gist with both files
+      const response = await octokit.gists.create({
+        description: `CSV QA - ${filename || "data"} - ${timestamp}`,
+        public: false, // Set to true if you want public gists
+        files: {
+          [`${filename || "data"}-${timestamp}.csv`]: {
+            content: csv,
+          },
+          [`settings-${timestamp}.json`]: {
+            content: settingsJson,
+          },
+        },
+      });
+
+      const gistId = response.data.id;
+      const gistUrl = response.data.html_url;
+      const csvFile =
+        response.data.files[`${filename || "data"}-${timestamp}.csv`];
+      const jsonFile = response.data.files[`settings-${timestamp}.json`];
+
+      const csvUrl = csvFile.raw_url;
+      const jsonUrl = jsonFile.raw_url;
+
+      // Generate shareable link
+      const shareableLink = `${window.location.origin}${
+        window.location.pathname
+      }?json=${encodeURIComponent(jsonUrl)}&csv=${encodeURIComponent(
+        csvUrl
+      )}&token=${encodeURIComponent(githubToken)}`;
+
+      setLoadedJsonUrl(jsonUrl);
+      setLoadedCsvUrl(csvUrl);
+      setUploadedGistUrl(shareableLink);
+      setShowGistDialog(true);
+      setSnack("Files uploaded to GitHub Gist successfully!");
+
+      console.log("Gist created:", { gistUrl, gistId, shareableLink });
+    } catch (error) {
+      console.error("Upload failed:", error);
+      setSnack(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // NEW: Save GitHub token
+  const saveGitHubToken = (token) => {
+    setGithubToken(token);
+    localStorage.setItem("github_token", token);
   };
 
   // Add beforeunload event listener to warn users before closing
@@ -1029,6 +1124,18 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               onClick={() => inputRef.current?.click()}
             >
               Upload CSV
+            </Button>
+            {/* NEW: GitHub Upload Button */}
+            <Button
+              startIcon={
+                uploading ? <CircularProgress size={16} /> : <CloudUploadIcon />
+              }
+              variant="contained"
+              color="secondary"
+              onClick={uploadToGitHub}
+              disabled={!hasData || uploading}
+            >
+              {uploading ? "Uploading..." : "Share to Cloud"}
             </Button>
             <Button
               startIcon={<SettingsIcon />}
@@ -1750,6 +1857,7 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
             <Tab label="Options" />
             <Tab label="Import/Export Settings" />
             <Tab label="Load CSV from URL" />
+            <Tab label="GitHub Integration" /> {/* NEW TAB */}
           </Tabs>
 
           {/* Tab 0: Options */}
@@ -2019,9 +2127,151 @@ What is your art?,Performance about memory and relations,Something else,, ,2,Off
               </Stack>
             </Stack>
           )}
+
+          {/* Tab 3: GitHub Integration */}
+          {settingsTab === 3 && (
+            <Stack spacing={2}>
+              <Alert severity="info">
+                To upload files to GitHub Gist, you need a Personal Access
+                Token.
+                <br />
+                <strong>Steps:</strong>
+                <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                  <li>
+                    Go to GitHub Settings → Developer settings → Personal access
+                    tokens → Tokens (classic)
+                  </li>
+                  <li>Click "Generate new token (classic)"</li>
+                  <li>
+                    Give it a name and select only the <strong>gist</strong>{" "}
+                    scope
+                  </li>
+                  <li>Generate and copy the token</li>
+                  <li>
+                    Paste it below OR add <code>?token=YOUR_TOKEN</code> to the
+                    URL
+                  </li>
+                </ol>
+                <a
+                  href="https://github.com/settings/tokens"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: "#1976d2" }}
+                >
+                  → Open GitHub Token Settings
+                </a>
+              </Alert>
+
+              <TextField
+                label="GitHub Personal Access Token"
+                type="password"
+                value={githubToken}
+                onChange={(e) => saveGitHubToken(e.target.value)}
+                fullWidth
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                helperText={
+                  githubToken
+                    ? "Token saved (stored in browser)"
+                    : "Enter your token to enable cloud uploads"
+                }
+              />
+
+              {githubToken && (
+                <Alert severity="success">
+                  Token configured! You can now use the "Share to Cloud" button.
+                </Alert>
+              )}
+
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  color="error"
+                  onClick={() => {
+                    saveGitHubToken("");
+                    setSnack("GitHub token cleared");
+                  }}
+                  disabled={!githubToken}
+                >
+                  Clear Token
+                </Button>
+              </Stack>
+            </Stack>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSettingsDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* NEW: Gist Upload Success Dialog */}
+      <Dialog
+        open={showGistDialog}
+        onClose={() => setShowGistDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Stack
+            direction="row"
+            justifyContent="space-between"
+            alignItems="center"
+          >
+            <Typography variant="h6">
+              Files Uploaded Successfully! 🎉
+            </Typography>
+            <IconButton size="small" onClick={() => setShowGistDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2}>
+            <Alert severity="success">
+              Your CSV and settings have been uploaded to GitHub Gist and a
+              shareable link has been generated.
+            </Alert>
+
+            <TextField
+              label="Shareable Link (Anyone with this link can load your data)"
+              value={uploadedGistUrl}
+              fullWidth
+              multiline
+              rows={3}
+              InputProps={{
+                readOnly: true,
+              }}
+              sx={wrapSx}
+            />
+
+            <Alert severity="info">
+              <strong>How to use:</strong>
+              <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                <li>
+                  Share this link with anyone who needs to review the data
+                </li>
+                <li>
+                  The link will automatically load the CSV, settings, and token
+                </li>
+                <li>Files are stored privately in your GitHub Gist</li>
+              </ul>
+            </Alert>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              navigator.clipboard.writeText(uploadedGistUrl);
+              setSnack("Link copied to clipboard!");
+            }}
+          >
+            Copy Link
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => window.open(uploadedGistUrl, "_blank")}
+          >
+            Open Link
+          </Button>
+          <Button onClick={() => setShowGistDialog(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </Box>
